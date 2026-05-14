@@ -77,8 +77,8 @@ function mapLinkToResource(link, index) {
 
 export const getConfig = () => ({
   token:  localStorage.getItem('parentfit_gh_token') || '',
-  owner:  localStorage.getItem('parentfit_gh_owner') || '',
-  repo:   localStorage.getItem('parentfit_gh_repo')  || '',
+  owner:  localStorage.getItem('parentfit_gh_owner') || 'ttaruntej',
+  repo:   localStorage.getItem('parentfit_gh_repo')  || 'parentfit',
   branch: localStorage.getItem('parentfit_gh_branch') || 'main',
 });
 
@@ -128,10 +128,10 @@ const getInitialData = (userId) => ({
 });
 
 // ─── Demo mode check ─────────────────────────────────────────────────────────
-// Demo = no token OR no owner/repo configured
+// Demo = just missing the token now, as owner/repo are pre-filled
 const isDemoMode = () => {
   const cfg = getConfig();
-  return !cfg.token || !cfg.owner || !cfg.repo;
+  return !cfg.token || cfg.token.length < 5;
 };
 
 // ─── Generic JSON File Reader ─────────────────────────────────────────────────

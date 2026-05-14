@@ -53,8 +53,9 @@ function streak(logs) {
 }
 
 export default function Dashboard({ onGoLog }) {
-  const { exerciseData, deleteExerciseLog, syncing } = useApp();
+  const { exerciseData, deleteExerciseLog, syncing, ghConfig, setIsSettingsOpen } = useApp();
   const logs = useMemo(() => (exerciseData?.logs || []).slice().reverse(), [exerciseData]);
+  const isDemo = !ghConfig.token || ghConfig.token.length < 5;
 
   const totalWorkouts = logs.length;
   const totalMins = logs.reduce((a, l) => a + (Number(l.durationMinutes) || 0), 0);
@@ -74,13 +75,29 @@ export default function Dashboard({ onGoLog }) {
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
       {/* Hero */}
-      <div className="hero-banner">
-        <div style={{ fontSize: '0.78rem', color: 'var(--fire-light)', fontWeight: 600, marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          {greet} 👋
+      <div className="hero-banner" style={{ paddingBottom: isDemo ? '0.75rem' : '1.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--fire-light)', fontWeight: 600, marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {greet} 👋
+            </div>
+            <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.5rem', marginBottom: '0.875rem' }}>
+              Ready to move today?
+            </h2>
+          </div>
+          {isDemo && (
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              style={{
+                background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)',
+                borderRadius: '999px', padding: '0.3rem 0.75rem', fontSize: '0.7rem',
+                fontWeight: 700, color: '#F59E0B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem'
+              }}
+            >
+              <Zap size={10} /> Activate Sync
+            </button>
+          )}
         </div>
-        <h2 style={{ fontFamily: 'var(--font-head)', fontSize: '1.5rem', marginBottom: '0.875rem' }}>
-          Ready to move today?
-        </h2>
 
         <div className="ring-chart-wrap">
           <RingChart done={thisWeek} goal={5} />
