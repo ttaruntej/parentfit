@@ -76,7 +76,7 @@ function mapLinkToResource(link, index) {
 // ─── Configuration — NO tokens hardcoded here ────────────────────────────────
 
 export const getConfig = () => ({
-  token:  localStorage.getItem('parentfit_gh_token') || '',
+  token:  localStorage.getItem('parentfit_gh_token') || import.meta.env.VITE_GH_TOKEN || '',
   owner:  localStorage.getItem('parentfit_gh_owner') || 'ttaruntej',
   repo:   localStorage.getItem('parentfit_gh_repo')  || 'parentfit',
   branch: localStorage.getItem('parentfit_gh_branch') || 'main',
@@ -128,10 +128,11 @@ const getInitialData = (userId) => ({
 });
 
 // ─── Demo mode check ─────────────────────────────────────────────────────────
-// Demo = just missing the token now, as owner/repo are pre-filled
+// Demo = missing token AND no injected secret
 const isDemoMode = () => {
   const cfg = getConfig();
-  return !cfg.token || cfg.token.length < 5;
+  const token = cfg.token;
+  return !token || token.length < 5;
 };
 
 // ─── Generic JSON File Reader ─────────────────────────────────────────────────
