@@ -58,6 +58,31 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => { loadData(activeUserId); }, [activeUserId]);
 
+  // ── Magic Link: Auto-configure via URL params ──────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const owner = params.get('owner');
+    const repo  = params.get('repo');
+    const branch = params.get('branch');
+
+    if (token || owner || repo) {
+      persistConfig({
+        token:  token  || ghConfig.token,
+        owner:  owner  || ghConfig.owner,
+        repo:   repo   || ghConfig.repo,
+        branch: branch || ghConfig.branch || 'main',
+      });
+      // Refresh local state
+      setGhConfig(getConfig());
+      triggerSuccess('Magic Link detected! Configuration synced ✓');
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Reload data
+      setTimeout(() => loadData(activeUserId), 500);
+    }
+  }, [ghConfig, activeUserId, loadData]);
+
   // ── Switch user ────────────────────────────────────────────────────────────
   const switchUser = (userId) => {
     setActiveUserId(userId);
