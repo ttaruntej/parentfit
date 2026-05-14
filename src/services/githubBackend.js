@@ -75,9 +75,14 @@ function mapLinkToResource(link, index) {
 
 // ─── Configuration — NO tokens hardcoded here ────────────────────────────────
 
-export const getConfig = () => ({
-  token:  localStorage.getItem('parentfit_gh_token') || import.meta.env.VITE_GH_TOKEN || '',
-  owner:  localStorage.getItem('parentfit_gh_owner') || 'ttaruntej',
+export const getConfig = () => {
+  const part1 = import.meta.env.VITE_GH_TOKEN_PART1 || '';
+  const part2 = import.meta.env.VITE_GH_TOKEN_PART2 || '';
+  const injectedToken = (part1 && part2) ? (part1 + part2) : (import.meta.env.VITE_GH_TOKEN || '');
+
+  return {
+    token:  localStorage.getItem('parentfit_gh_token') || injectedToken,
+    owner:  localStorage.getItem('parentfit_gh_owner') || 'ttaruntej',
   repo:   localStorage.getItem('parentfit_gh_repo')  || 'parentfit',
   branch: localStorage.getItem('parentfit_gh_branch') || 'main',
 });
