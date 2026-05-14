@@ -61,14 +61,12 @@ export const AppProvider = ({ children }) => {
   // ── Magic Link: Auto-configure via URL params ──────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
     const owner = params.get('owner');
     const repo  = params.get('repo');
     const branch = params.get('branch');
 
-    if (token || owner || repo) {
+    if (owner || repo) {
       persistConfig({
-        token:  token  || ghConfig.token,
         owner:  owner  || ghConfig.owner,
         repo:   repo   || ghConfig.repo,
         branch: branch || ghConfig.branch || 'main',

@@ -77,16 +77,13 @@ function mapLinkToResource(link, index) {
 
 export const getConfig = () => ({
   token:  localStorage.getItem('parentfit_gh_token') || '',
-  owner:  localStorage.getItem('parentfit_gh_owner') || 'ttaruntej',
-  repo:   localStorage.getItem('parentfit_gh_repo')  || 'parentfit',
+  owner:  localStorage.getItem('parentfit_gh_owner') || '',
+  repo:   localStorage.getItem('parentfit_gh_repo')  || '',
   branch: localStorage.getItem('parentfit_gh_branch') || 'main',
 });
 
 export const saveConfig = ({ token, owner, repo, branch }) => {
-  // Only persist token if the user explicitly provided one
-  if (token !== undefined && token !== null) {
-    localStorage.setItem('parentfit_gh_token', token.trim());
-  }
+  if (token !== undefined) localStorage.setItem('parentfit_gh_token', token.trim());
   if (owner)  localStorage.setItem('parentfit_gh_owner', owner.trim());
   if (repo)   localStorage.setItem('parentfit_gh_repo', repo.trim());
   if (branch) localStorage.setItem('parentfit_gh_branch', branch.trim());
@@ -112,11 +109,11 @@ const userFilePaths = (userId) => ({
 // ─── Seed data (Apparao's historical data from bundled JSON) ─────────────────
 
 const INITIAL_EXERCISES_APPARAO = {
-  logs: exerciseLogJson.sessions.map(mapSessionToLog),
+  logs: (exerciseLogJson.sessions || []).map(mapSessionToLog),
 };
 
 const INITIAL_RESOURCES_APPARAO = {
-  resources: resourceLinksJson.links
+  resources: (resourceLinksJson.links || [])
     .filter(l => !l.duplicate)
     .map((l, i) => mapLinkToResource(l, i)),
 };
@@ -131,10 +128,10 @@ const getInitialData = (userId) => ({
 });
 
 // ─── Demo mode check ─────────────────────────────────────────────────────────
-// Demo = no token configured OR no real repo set up
+// Demo = no token OR no owner/repo configured
 const isDemoMode = () => {
   const cfg = getConfig();
-  return !cfg.token || cfg.token.length < 10;
+  return !cfg.token || !cfg.owner || !cfg.repo;
 };
 
 // ─── Generic JSON File Reader ─────────────────────────────────────────────────
