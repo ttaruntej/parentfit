@@ -107,6 +107,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteExerciseLog = async (logId) => {
+    if (!window.confirm('Are you sure you want to delete this session? This cannot be undone.')) return;
     setSyncing(true);
     const updated = { ...exerciseData, logs: (exerciseData.logs || []).filter(l => l.id !== logId) };
     setExerciseData(updated);
@@ -114,7 +115,10 @@ export const AppProvider = ({ children }) => {
       await saveExerciseLogs(updated, activeUserId);
       triggerSuccess('Session removed.');
     } catch (err) {
-      triggerError('Failed to delete session remotely.');
+      console.error('Delete failed:', err);
+      triggerError(`Failed to delete remotely: ${err.message || 'Check your token'}`);
+      // Rollback local state on error
+      loadData(activeUserId);
     } finally {
       setSyncing(false);
     }
@@ -136,6 +140,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteResourceLink = async (resId) => {
+    if (!window.confirm('Delete this resource?')) return;
     setSyncing(true);
     const updated = { ...resourceData, resources: (resourceData.resources || []).filter(r => r.id !== resId) };
     setResourceData(updated);
@@ -144,6 +149,7 @@ export const AppProvider = ({ children }) => {
       triggerSuccess('Resource removed.');
     } catch (err) {
       triggerError('Failed to remove resource.');
+      loadData(activeUserId);
     } finally {
       setSyncing(false);
     }

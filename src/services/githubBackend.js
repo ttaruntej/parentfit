@@ -132,7 +132,8 @@ const getInitialData = (userId) => ({
 const isDemoMode = () => {
   const cfg = getConfig();
   const token = cfg.token;
-  return !token || token.length < 5;
+  // If we have any token longer than 10 chars, it's likely a real GH token
+  return !token || token.length < 10;
 };
 
 // ─── Generic JSON File Reader ─────────────────────────────────────────────────
