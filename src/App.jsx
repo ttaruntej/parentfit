@@ -11,76 +11,124 @@ import SettingsModal from './components/SettingsModal';
 import { CheckCircle, AlertTriangle, Dumbbell, Settings, Github, Database } from 'lucide-react';
 
 
-function SettingsPage() {
-  const { ghConfig, syncing, forceManualSync, setIsSettingsOpen } = useApp();
-  const onOpenModal = () => setIsSettingsOpen(true);
-  const isDemo = ghConfig.owner === 'parent-fitness' && ghConfig.repo === 'exercise-logs';
+function KnowledgeCard({ title, desc, tag, img }) {
   return (
-    <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ fontFamily: 'var(--font-head)', fontSize: '1.3rem', fontWeight: 700, marginBottom: '0.25rem' }}>Settings</div>
-
-      <div className="card">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-          <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', background: 'rgba(0,200,150,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Github size={20} color="var(--teal)" />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600 }}>GitHub Backend</div>
-            <div className="text-xs text-dim">Data sync configuration</div>
-          </div>
-          <span style={{ marginLeft: 'auto', fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: '999px',
-            background: isDemo ? 'rgba(245,158,11,0.12)' : 'rgba(0,200,150,0.12)',
-            color: isDemo ? '#F59E0B' : 'var(--teal)',
-            border: `1px solid ${isDemo ? 'rgba(245,158,11,0.3)' : 'rgba(0,200,150,0.3)'}`,
-          }}>
-            {isDemo ? 'Demo' : 'Live'}
-          </span>
-        </div>
-        {isDemo ? (
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.875rem', lineHeight: 1.5 }}>
-            Running in demo mode. Connect your GitHub repository to sync workouts across devices.
-          </div>
-        ) : (
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.875rem' }}>
-            Connected to <strong style={{ color: 'var(--text-primary)' }}>{ghConfig.owner}/{ghConfig.repo}</strong>
-          </div>
-        )}
-        <button className="btn btn-fire" style={{ width: '100%', borderRadius: 'var(--radius-md)' }} onClick={onOpenModal}>
-          <Settings size={16} /> {isDemo ? 'Connect Repository' : 'Edit Configuration'}
-        </button>
-      </div>
-
-      <div className="card">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-sm)', background: 'rgba(255,107,53,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Database size={20} color="var(--fire)" />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600 }}>Sync Data</div>
-            <div className="text-xs text-dim">Force refresh from remote</div>
-          </div>
-          <button className="btn btn-ghost" style={{ padding: '0.5rem 0.875rem', fontSize: '0.82rem', borderRadius: 'var(--radius-sm)' }} onClick={forceManualSync} disabled={syncing}>
-            {syncing ? '⏳' : '↻'} Sync
-          </button>
-        </div>
-      </div>
-
-      <div className="card" style={{ borderColor: 'var(--border-subtle)' }}>
-        <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', textAlign: 'center', lineHeight: 1.6 }}>
-          ParentFit · Built for parents who move 💪<br />
-          Data stored in your GitHub repository
-        </div>
+    <div className="content-card">
+      <img src={img} alt={title} className="content-card-img" />
+      <div className="content-card-overlay">
+        <div className="content-card-tag">{tag}</div>
+        <div className="content-card-title">{title}</div>
+        <div className="content-card-desc">{desc}</div>
       </div>
     </div>
   );
 }
+
+function MorePage() {
+  const { ghConfig, syncing, forceManualSync, setIsSettingsOpen } = useApp();
+  const onOpenModal = () => setIsSettingsOpen(true);
+  const isDemo = ghConfig.owner === 'parent-fitness' && ghConfig.repo === 'exercise-logs';
+
+  const knowledgeItems = [
+    {
+      title: "Micro-Workouts",
+      desc: "5-15 min bursts for busy schedules. No gym required.",
+      tag: "Efficiency",
+      img: "./src/assets/content/micro_workouts.png"
+    },
+    {
+      title: "Functional Dad Strength",
+      desc: "Compound lifts to make parenting effortless.",
+      tag: "Strength",
+      img: "./src/assets/content/dad_strength.png"
+    },
+    {
+      title: "Energy Nutrition",
+      desc: "Fuel your day with protein-focused meal prep.",
+      tag: "Nutrition",
+      img: "./src/assets/content/nutrition.png"
+    },
+    {
+      title: "Family Adventure",
+      desc: "Turn outdoor time into a family fitness journey.",
+      tag: "Lifestyle",
+      img: "./src/assets/content/family_fitness.png"
+    }
+  ];
+
+  return (
+    <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div>
+        <div className="section-header">
+          <div className="section-title">Knowledge Hub</div>
+          <div className="glass-pill">AI Curated</div>
+        </div>
+        <div className="knowledge-grid">
+          {knowledgeItems.map((item, i) => (
+            <KnowledgeCard key={i} {...item} />
+          ))}
+        </div>
+      </div>
+
+      <div className="section-divider"></div>
+
+      <div>
+        <div className="section-title" style={{ marginBottom: '0.75rem' }}>System & Preferences</div>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+          <div className="card" style={{ padding: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'rgba(0,200,150,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Github size={18} color="var(--teal)" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>GitHub Backend</div>
+                <div className="text-xs text-dim">Cloud synchronization</div>
+              </div>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '999px',
+                background: isDemo ? 'rgba(245,158,11,0.1)' : 'rgba(0,200,150,0.1)',
+                color: isDemo ? '#F59E0B' : 'var(--teal)',
+                border: `1px solid ${isDemo ? 'rgba(245,158,11,0.2)' : 'rgba(0,200,150,0.2)'}`,
+              }}>
+                {isDemo ? 'Demo' : 'Live'}
+              </span>
+            </div>
+            <button className="btn btn-ghost" style={{ width: '100%', fontSize: '0.8rem', padding: '0.6rem' }} onClick={onOpenModal}>
+              <Settings size={14} /> Configure Repository
+            </button>
+          </div>
+
+          <div className="card" style={{ padding: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'rgba(255,107,53,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Database size={18} color="var(--fire)" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Manual Sync</div>
+                <div className="text-xs text-dim">Force data refresh</div>
+              </div>
+              <button className="btn btn-ghost" style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }} onClick={forceManualSync} disabled={syncing}>
+                {syncing ? '...' : 'Sync'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: '1rem', opacity: 0.6 }}>
+        ParentFit v1.2 · Premium Experience
+      </div>
+    </div>
+  );
+}
+
 
 const PAGE_TITLE = {
   home: 'Today',
   log: 'Log Session',
   history: 'History',
   resources: 'Library',
-  settings: 'Settings',
+  settings: 'More',
 };
 
 export default function App() {
@@ -119,7 +167,7 @@ export default function App() {
               {tab === 'log' && <ExerciseLogger />}
               {tab === 'history' && <HistoryView />}
               {tab === 'resources' && <ResourceHub />}
-              {tab === 'settings' && <SettingsPage />}
+              {tab === 'settings' && <MorePage />}
             </>
           )}
         </div>
