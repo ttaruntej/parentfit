@@ -8,7 +8,7 @@ import HistoryView from './components/HistoryView';
 import ResourceHub from './components/ResourceHub';
 import MediaPlayerModal from './components/MediaPlayerModal';
 import SettingsModal from './components/SettingsModal';
-import { CheckCircle, AlertTriangle, Dumbbell, Settings, Github, Database } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Dumbbell, Settings, Cloud, Database } from 'lucide-react';
 
 
 function KnowledgeCard({ title, desc, tag, img }) {
@@ -79,11 +79,11 @@ function MorePage() {
           <div className="card" style={{ padding: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
               <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'rgba(0,200,150,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Github size={18} color="var(--teal)" />
+                <Cloud size={18} color="var(--teal)" />
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>GitHub Backend</div>
-                <div className="text-xs text-dim">Cloud synchronization</div>
+                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Cloud Synchronization</div>
+                <div className="text-xs text-dim">Secure remote storage</div>
               </div>
               <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '999px',
                 background: isDemo ? 'rgba(245,158,11,0.1)' : 'rgba(0,200,150,0.1)',
@@ -94,7 +94,7 @@ function MorePage() {
               </span>
             </div>
             <button className="btn btn-ghost" style={{ width: '100%', fontSize: '0.8rem', padding: '0.6rem' }} onClick={onOpenModal}>
-              <Settings size={14} /> Configure Repository
+              <Settings size={14} /> Configure Storage
             </button>
           </div>
 

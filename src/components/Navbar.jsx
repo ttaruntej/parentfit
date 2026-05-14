@@ -99,7 +99,7 @@ export default function Navbar() {
         {/* Sync status */}
         <div
           onClick={() => setIsSettingsOpen(true)}
-          title={isDemo ? 'No GitHub token — tap to configure' : 'Synced with GitHub'}
+          title={isDemo ? 'Cloud sync disabled — tap to configure' : 'Synced with cloud storage'}
           style={{
             display: 'flex', alignItems: 'center', gap: '0.35rem',
             padding: '0.3rem 0.65rem',

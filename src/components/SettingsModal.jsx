@@ -63,8 +63,8 @@ export default function SettingsModal() {
               <Database size={18} color="var(--fire)" />
             </div>
             <div>
-              <div style={{ fontFamily: 'var(--font-head)', fontWeight: 700, fontSize: '1rem' }}>Connect Repository</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>GitHub storage configuration</div>
+              <div style={{ fontFamily: 'var(--font-head)', fontWeight: 700, fontSize: '1rem' }}>Connect Storage</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Cloud storage configuration</div>
             </div>
           </div>
           <button type="button" onClick={() => setIsSettingsOpen(false)} className="btn btn-ghost btn-icon">
@@ -75,7 +75,7 @@ export default function SettingsModal() {
         {/* Info banner */}
         <div style={{ background: 'rgba(255,107,53,0.07)', borderLeft: '3px solid var(--fire)', padding: '0.75rem', borderRadius: '0 var(--radius-sm) var(--radius-sm) 0', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5, display: 'flex', gap: '0.5rem' }}>
           <Info size={14} color="var(--fire)" style={{ flexShrink: 0, marginTop: '0.1rem' }} />
-          Connect your GitHub repo to sync workouts across devices. Token is stored locally in your browser only.
+          Connect your storage repository to sync workouts across devices. Token is stored locally in your browser only.
         </div>
 
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -86,7 +86,7 @@ export default function SettingsModal() {
               <input
                 type={showToken ? 'text' : 'password'}
                 className="input"
-                placeholder="ghp_..."
+                placeholder="Enter access token..."
                 value={token}
                 onChange={e => setToken(e.target.value)}
                 style={{ paddingRight: '2.75rem' }}

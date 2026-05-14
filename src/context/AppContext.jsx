@@ -50,7 +50,7 @@ export const AppProvider = ({ children }) => {
       setResourceData(resources || { resources: [] });
     } catch (err) {
       console.error('Failed loading data:', err);
-      triggerError('Could not sync with GitHub. Serving cached data.');
+      triggerError('Could not sync with cloud storage. Serving cached data.');
     } finally {
       setLoading(false);
     }
@@ -96,11 +96,11 @@ export const AppProvider = ({ children }) => {
     try {
       const res = await saveExerciseLogs(updated, activeUserId);
       triggerSuccess(res.simulated
-        ? `Session logged locally! Add GitHub token in Settings to sync.`
-        : `Session committed to GitHub ✓`
+        ? `Session logged locally! Add access token in Settings to sync.`
+        : `Session synced to cloud ✓`
       );
     } catch (err) {
-      triggerError('Failed to save session to GitHub. Cached locally.');
+      triggerError('Failed to sync session to cloud. Cached locally.');
     } finally {
       setSyncing(false);
     }
@@ -131,7 +131,7 @@ export const AppProvider = ({ children }) => {
     setResourceData(updated);
     try {
       const res = await saveResourceLinks(updated, activeUserId);
-      triggerSuccess(res.simulated ? 'Resource saved locally.' : 'Resource synced to GitHub ✓');
+      triggerSuccess(res.simulated ? 'Resource saved locally.' : 'Resource synced to cloud ✓');
     } catch (err) {
       triggerError('Failed to save resource remotely.');
     } finally {
@@ -158,7 +158,7 @@ export const AppProvider = ({ children }) => {
   // ── Config & sync ──────────────────────────────────────────────────────────
   const forceManualSync = async () => {
     await loadData(activeUserId);
-    triggerSuccess('Synced from GitHub ✓');
+    triggerSuccess('Synced from cloud storage ✓');
   };
 
   const updateConfig = (newCfg) => {

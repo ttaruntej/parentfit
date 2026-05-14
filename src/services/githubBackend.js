@@ -83,9 +83,10 @@ export const getConfig = () => {
   return {
     token:  localStorage.getItem('parentfit_gh_token') || injectedToken,
     owner:  localStorage.getItem('parentfit_gh_owner') || 'ttaruntej',
-  repo:   localStorage.getItem('parentfit_gh_repo')  || 'parentfit',
-  branch: localStorage.getItem('parentfit_gh_branch') || 'main',
-});
+    repo:   localStorage.getItem('parentfit_gh_repo')  || 'parentfit',
+    branch: localStorage.getItem('parentfit_gh_branch') || 'main',
+  };
+};
 
 export const saveConfig = ({ token, owner, repo, branch }) => {
   if (token !== undefined) localStorage.setItem('parentfit_gh_token', token.trim());
@@ -190,7 +191,7 @@ export const saveJsonFile = async (path, contentObj) => {
   localStorage.setItem(`parentfit_mock_${path}`, contentString);
 
   if (isDemoMode()) {
-    console.log(`[Demo Mode] Saved locally for ${path}. Add GitHub token in Settings to sync.`);
+    console.log(`[Demo Mode] Saved locally for ${path}. Add access token in Settings to sync.`);
     return { success: true, simulated: true };
   }
 
@@ -211,7 +212,7 @@ export const saveJsonFile = async (path, contentObj) => {
 
     return { success: true, simulated: false };
   } catch (error) {
-    console.error(`Failed to push ${path} to GitHub:`, error.message);
+    console.error(`Failed to push ${path} to cloud storage:`, error.message);
     throw error;
   }
 };
