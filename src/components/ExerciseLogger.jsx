@@ -46,6 +46,14 @@ const PRESETS = {
 const emptyEx = () => ({ name: '', equipment: 'dumbbell', sets: [{ weight_kg: '', reps: '', bodyweight: false }], open: true });
 const emptySet = () => ({ weight_kg: '', reps: '', bodyweight: false });
 
+function localDateKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function localTimeKey(date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
 // Step 1 — pick workout type
 function TypeStep({ selected, onSelect }) {
   return (
@@ -277,10 +285,14 @@ export default function ExerciseLogger() {
 
     const typeInfo = TYPES.find(t => t.value === workoutType) || TYPES[4];
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = localDateKey(now);
     const payload = {
       id: `session_${Date.now()}`,
-      date: now.toISOString(),
+      date: today,
+      timeOfDay: localTimeKey(now),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata',
+      performedAt: now.toISOString(),
+      performedAtTs: now,
       dayOfWeek: now.toLocaleDateString('en-US', { weekday: 'long' }),
       workoutType,
       category: WORKOUT_CATEGORY[workoutType] || WORKOUT_CATEGORY.mixed,

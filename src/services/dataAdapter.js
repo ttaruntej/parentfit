@@ -59,7 +59,7 @@ export async function deleteResource(profileId, id) {
 
 export function subscribeSessions(profileId, onChange) {
   return onSnapshot(
-    query(sessionsCol(profileId), orderBy('date', 'desc')),
+    query(sessionsCol(profileId), orderBy('performedAtTs', 'desc')),
     (snap) => onChange(snap.docs.map(docToSession)),
     (err) => console.error('sessions listener error:', err),
   );
@@ -75,9 +75,19 @@ export function subscribeResources(profileId, onChange) {
 
 function docToSession(d) {
   const data = d.data();
+  const performedAt = data.performedAt || timestampToIso(data.performedAtTs) || data.date;
+  const sourceMessageAt = data.sourceMessageAt || timestampToIso(data.sourceMessageAtTs);
   return {
     id: d.id,
     date: data.date,
+    timeOfDay: data.timeOfDay,
+    timeZone: data.timeZone,
+    performedAt,
+    performedAtTs: data.performedAtTs,
+    sourceMessageAt,
+    sourceMessageAtTs: data.sourceMessageAtTs,
+    sourceSender: data.sourceSender,
+    profileSlug: data.profileSlug,
     workoutType: data.workoutType,
     category: data.category,
     title: data.title,
@@ -91,8 +101,19 @@ function docToSession(d) {
 }
 
 function sessionToDoc(s) {
-  return {
+  const performedAt = s.performedAt || s.date || new Date().toISOString();
+  const performedAtDate = toValidDate(performedAt) || new Date();
+  const sourceMessageAtDate = toValidDate(s.sourceMessageAt);
+  return stripUndefined({
     date: s.date,
+    timeOfDay: s.timeOfDay,
+    timeZone: s.timeZone,
+    performedAt,
+    performedAtTs: s.performedAtTs || performedAtDate,
+    sourceMessageAt: s.sourceMessageAt || null,
+    sourceMessageAtTs: sourceMessageAtDate,
+    sourceSender: s.sourceSender || null,
+    profileSlug: s.profileSlug || null,
     workoutType: s.workoutType,
     category: s.category,
     title: s.title,
@@ -102,7 +123,24 @@ function sessionToDoc(s) {
     exercises: s.exercises ?? [],
     dayOfWeek: s.dayOfWeek,
     rawHeader: s.rawHeader,
-  };
+  });
+}
+
+function timestampToIso(value) {
+  if (!value) return null;
+  if (typeof value.toDate === 'function') return value.toDate().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  return typeof value === 'string' ? value : null;
+}
+
+function toValidDate(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function stripUndefined(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined));
 }
 
 function docToResource(d) {

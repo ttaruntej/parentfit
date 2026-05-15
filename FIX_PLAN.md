@@ -8,6 +8,54 @@
 
 ---
 
+## Progress — 2026-05-15 (Firebase Migration Shipped)
+
+Commit `fe44339` on `main` migrated the backend to Firebase (Auth + Firestore). The deploy workflow no longer ships any GitHub token. Many tickets below are now closed; others are unblocked. Status by ticket:
+
+### Done
+- **P0-1** PAT rotation — DONE (owner revoked the leaked token).
+- **P0-2** Strip token from bundle — DONE (workflow updated; `VITE_GH_TOKEN_PART*` removed; `getConfig()` deleted).
+- **P0-3** Magic Link confirmation — MOOT (Magic Link flow deleted with the GitHub backend).
+- **P0-4** Dashboard recent-sessions order — DONE (`Dashboard.jsx` sort by date desc).
+- **P0-5** Optimistic add rollback / auto-sync gate — MOOT (listener-driven `AppContext`; no manual optimism; no 5-min interval).
+- **P0-6** `forceManualSync` success/error reconciliation — MOOT (function is now a trivial success toast since the listener is live).
+- **P1-8** Demo-mode trip wire by `!token` — MOOT (no demo mode).
+- **P1-9** Empty default owner/repo — MOOT (no GitHub config at all).
+- **P2-1** ErrorBoundary — DONE (`src/components/ErrorBoundary.jsx`, wired in `main.jsx`).
+- **P2-2** `aria-live` toasts — DONE (`App.jsx` wraps toast region; error toast has `role="alert"`).
+- **P2-6** Replace Octokit with fetch — MOOT (Octokit not in bundle; Firebase SDK replaces it).
+- **P2-7** Drop `escape`/`unescape` — MOOT (base64 path gone with the GitHub backend; legacy file `src/services/githubBackend.js` slated for deletion in P6).
+- **P2-10** Lazy-init seed mapping — MOOT (seed mapping no longer runs at runtime).
+- **P3-2** `npm ci` + Node engine — PARTIAL (workflow uses `npm ci`; `engines` in `package.json` still not added).
+- **P4-1** Backend proxy — DONE in spirit (Firebase plays the proxy role; secret never reaches browser).
+- **P4-7** Multi-user seed from `USERS` const — MOOT (Firestore profile docs replace the const).
+- **C-1 … C-15** (Appendix C migration tickets) — DONE through C-15. C-16/C-17 (data migration script + run) still open. C-18 (rules emulator tests) optional, still open. C-19 (legacy code cleanup) merged into the new **P6** section below.
+
+### Still open (highest impact first)
+- **P1-1** Knowledge Hub images 404 in production — visible regression on live site.
+- **P1-3** Empty sessions can be submitted.
+- **P1-4** URL parser hardening (Media player + ResourceHub).
+- **P1-5** `category` schema drift — new logs still emit `"Push Day"`-style strings instead of canonical `"Strength / Push"`. One-line fix.
+- **P1-6** Stop fabricating the 06:00 IST timestamp.
+- **P2-3** Focus indicators.
+- **P2-4** History card keyboard accessibility.
+- **P2-5** User-switcher overlay → document listener.
+- **P3-1** Untrack `dist/index.html`.
+- **P3-3** Drive `base` from CI environment.
+- **P3-5** ESLint + Prettier.
+- **P3-6** Vitest + smoke tests.
+- All MEDIUM/LOW items in section P2/P3 remain open.
+
+### New post-migration cleanup tickets — see **P6** section below
+- **P6-1** Delete legacy `githubBackend.js`, JSON seed files, Octokit dep.
+- **P6-2** Remove compat aliases from `AppContext` after Navbar update.
+- **P6-3** Update `Navbar.jsx` to use native `profiles` / `activeProfile`.
+- **P6-4** Delete the old `VITE_GH_TOKEN` repository secret.
+- **P6-5** Write & run the data migration script (Appendix C.10) if historical data must come over.
+- **P6-6** Smoke-test the live deploy.
+
+---
+
 ## How to use this file
 
 - Each ticket header is `### [ID] Title — [severity]`.
@@ -862,6 +910,78 @@
 
 ### [P4-8] Add an explicit "Edit session" flow — [LOW]
 - Currently sessions are immutable post-creation. The 3.2 counterweight issue and any typo in a workout becomes permanent. Low priority but commonly requested.
+
+---
+
+## P6 — Post-Firebase-Migration Cleanup
+
+These tickets exist because the migration intentionally left the legacy GitHub-backend files in place to keep `main` shippable mid-transition. Execute these in order; each is small.
+
+### [P6-1] Delete legacy GitHub-backend code — [HIGH]
+- **Files:** `src/services/githubBackend.js`, `src/data/exercise_log.json`, `src/data/resource_links.json`.
+- **Why now:** these are unused at runtime (verified by `grep` — only `githubBackend.js` references itself); they're dead weight in the repo and dead code in any future tree-shake graph if accidentally imported.
+- **Steps:**
+  ```powershell
+  git rm src/services/githubBackend.js src/data/exercise_log.json src/data/resource_links.json
+  ```
+- **Verification:** `npm run build` succeeds. `Grep` for `githubBackend|exerciseLogJson|resourceLinksJson` returns no matches outside of `scripts/parseData.mjs` (which is a one-shot ETL script, not runtime).
+- **Depends on:** P6-5 if you need to preserve the seed data in Firestore — run the migration first, then delete.
+- **Risk:** none if P6-5 already ran. Else the seed JSON is lost from the live experience.
+
+### [P6-2] Remove compat aliases from `AppContext` — [MEDIUM]
+- **File:** `src/context/AppContext.jsx`, the bottom of the `value` object passed to the provider.
+- **Current code:**
+  ```js
+  users: profiles,
+  activeUserId: activeProfileId,
+  switchUser: switchProfile,
+  ghConfig: { token: 'firebase', owner: '', repo: '', branch: 'main' },
+  ```
+- **Why they exist:** `Navbar.jsx` and (transitively) some `Dashboard.jsx` code still destructure `users`, `activeUserId`, `switchUser`, `ghConfig`. Removing the aliases without updating the consumers would white-screen the app.
+- **Depends on:** P6-3.
+- **Acceptance:** the four lines above are gone, app still builds.
+
+### [P6-3] Update `Navbar.jsx` to native names — [MEDIUM]
+- **File:** `src/components/Navbar.jsx`.
+- **Current** destructure: `const { syncing, forceManualSync, ghConfig, setIsSettingsOpen, activeUserId, switchUser, users } = useApp();`
+- **Proposed**: `const { syncing, forceManualSync, setIsSettingsOpen, activeProfileId, switchProfile, profiles } = useApp();`
+  - Rename internal var `activeUser` → `activeProfile`.
+  - Replace `users.find(u => u.id === activeUserId)` with `profiles.find(p => p.id === activeProfileId)`.
+  - Replace `users.map(...)` in the dropdown with `profiles.map(...)`.
+  - Remove the `isDemo` computation (`!ghConfig.token || ghConfig.token.length < 10`). Hard-code the pill to "Live" since the user is, by definition, authenticated when this renders. Optional: detect `navigator.onLine === false` and show an "Offline" pill instead.
+- **Verification:** open the app signed in, dropdown lists your real profile(s), navbar pill says "Live".
+
+### [P6-4] Delete the old `VITE_GH_TOKEN` repository secret — [LOW]
+- **Where:** GitHub → repo Settings → Secrets and variables → Actions → **Secrets** tab.
+- **Action:** delete `VITE_GH_TOKEN`. Nothing references it anymore.
+- **Verification:** secrets list does not contain `VITE_GH_TOKEN`. Next workflow run still succeeds.
+
+### [P6-5] Run the data migration script (Appendix C.10) — [HIGH, optional]
+- **Skip entirely if you don't care about historical Apparao data.** The app works fine starting from zero.
+- **Steps:** see Appendix C.10. Generate a service account JSON, set `GOOGLE_APPLICATION_CREDENTIALS` + `ACCOUNT_EMAIL`, run `node scripts/migrateToFirebase.mjs`.
+- **Pre-req:** `scripts/migrateToFirebase.mjs` does not exist yet — you must first paste the script from Appendix C.10 into that path.
+- **Acceptance:** Firestore console shows session and resource documents under `users/<your-uid>/profiles/apparao/sessions` matching the legacy counts.
+- **Cleanup after success:** delete the service account JSON from your local machine, or move it to a password manager.
+
+### [P6-6] Smoke-test the live deploy — [HIGH]
+- **Where:** <https://ttaruntej.github.io/parentfit/> (or your deployed URL).
+- **Checklist:**
+  - [ ] Loads to SignIn screen on first visit.
+  - [ ] Magic link email arrives within 1 minute.
+  - [ ] Sign in succeeds; ProfileSetup renders.
+  - [ ] Creating a profile lands on the empty dashboard.
+  - [ ] Logging a workout persists across hard refresh.
+  - [ ] Open a second device → same email → both see the same data within seconds.
+  - [ ] Open the deployed URL in incognito (no auth) and try the anonymous-read test from Appendix C.4. Expect `permission-denied`.
+- **If any step fails:** open browser DevTools console; paste the error and which step.
+
+### [P6-7] Cleanup tracked-but-stale `dist/index.html` — [LOW]
+- See [P3-1]. Run `git rm --cached dist/index.html` and commit. `.gitignore` already covers `dist`.
+
+### [P6-8] Optional: shrink Firebase bundle — [LOW]
+- **Current:** 772 KB raw / 197 KB gzip — Firebase SDK is the largest contributor.
+- **Approach:** dynamic-import `firebase/firestore` inside `dataAdapter.js` so it lazy-loads after first auth. Likely shaves 100–200 KB off initial bundle.
+- **Skip unless** mobile users complain about cold-start latency.
 
 ---
 

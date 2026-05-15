@@ -12,6 +12,8 @@
     "format": "prettier --write \"src/**/*.{js,jsx,css,json,md}\"",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
+    "parse:data": "node scripts/parseData.mjs",
+    "import:workouts": "node scripts/importFirestoreWorkouts.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },

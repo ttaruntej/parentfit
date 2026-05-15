@@ -29,3 +29,6 @@ dist-ssr
 *-service-account*.json
 .agents/
 skills-lock.json
+
+# Local workout data (personal — not for the public repo)
+src/data/

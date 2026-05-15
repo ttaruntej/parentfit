@@ -14,6 +14,58 @@ Each finding includes: location → evidence → impact → context.
 
 ---
 
+## Status Update — 2026-05-15 (Firebase Migration Live)
+
+The Firebase migration (FIX_PLAN Appendix C) shipped in commit `fe44339` on `main`. This changes the answer for many findings below. Summary:
+
+### Resolved (no further work)
+- **1.1** Leaked PAT — **token revoked** by owner. Still exists in pre-`880ca76` git history but is dead.
+- **1.2** Token shipped in bundle — **eliminated**. Workflow no longer injects any token; `VITE_GH_TOKEN_PART*` removed.
+- **1.3** Magic Link silent rewrite — **deleted** along with the rest of the GitHub-config flow.
+- **1.7** localStorage as only token store — **moot**. No tokens. Firebase ID token is JWT-validated server-side per request.
+- **2.1** Dashboard "Recent Sessions" ordering — **fixed** in `Dashboard.jsx` (sort by date desc instead of reverse).
+- **2.3** Optimistic add no rollback — **moot**. Listener-driven state in `AppContext` reconciles automatically.
+- **2.4** Auto-sync race — **moot**. 5-minute interval + `visibilitychange` handler removed; replaced by `onSnapshot`.
+- **2.5** `forceManualSync` false success — **fixed**. Trivial no-op now that the listener is live.
+- **2.11** Demo-mode trip wire by token length — **deleted** with demo mode.
+- **2.12** Hardcoded default owner/repo — **deleted** with GitHub backend.
+- **3.4** Seed JSON re-parsed on every cold start — **moot**. Seed file no longer imported by runtime code.
+- **3.5** `mapLinkToResource` type drift — **moot**. Mapper deleted.
+- **4.1** Missing `loadData` dep in `useEffect` — **moot**. `AppContext` rewritten; old function gone.
+- **4.2** Magic Link effect re-runs — **moot**. Effect deleted.
+- **4.4** Magic `setTimeout(..., 500)` × 2 — **moot**. Both removed.
+- **5.1** Toasts lack `aria-live` — **fixed**. `App.jsx` wraps the toast container in `role="status" aria-live="polite"`, error toast has `role="alert"`.
+- **6.1** Octokit bundle bloat — **closed** (Octokit removed in spirit; Firebase SDK adds its own weight, see Status 6.1 note below).
+- **7.2** `npm install` in CI — **fixed**. Workflow now uses `npm ci`.
+- **8.1** No error boundary — **fixed**. `ErrorBoundary` wraps the tree in `main.jsx`.
+
+### Partial / Changed
+- **6.1** (new state): the bundle is now 772 KB raw / 197 KB gzip. Firebase is the largest single contributor. Future work: code-split `firebase/firestore` + `firebase/auth` via dynamic imports.
+- **7.1** `dist/` tracking: `.gitignore` still says `dist`, but `dist/index.html` is still tracked-but-stale locally. Untrack ticket [P3-1] still open.
+- **9.x** Branding: footer updated to "Firebase Sync" but `index.html` title and README still need a pass.
+
+### Still open (priority order — see FIX_PLAN for tickets)
+- **2.2** Knowledge Hub images 404 in production — broken in the deployed bundle (raw `./src/assets/content/*.png` paths). Fix is [P1-1].
+- **1.4–1.6** Media-URL substring parsers (no host check). [P1-4].
+- **2.6** Empty sessions can be submitted. [P1-3].
+- **2.9** Fabricated 06:00 IST timestamp on new sessions. [P1-6].
+- **3.1** `category` schema drift between fresh and (now-archived) seed data. [P1-5] — partly moot since seed is gone, but new logs still use the wrong `category` string. Fix is one-line.
+- **5.2** HistoryView card not keyboard-accessible. [P2-4].
+- **5.3** Focus indicators missing on many buttons. [P2-3].
+- Most of section **5**, **6**, **8** still applies as quality/accessibility/perf work.
+
+### New post-migration findings (added to FIX_PLAN as P6)
+- **N1** Compat aliases in `AppContext` (`users`, `activeUserId`, `switchUser`, `ghConfig`) exist only to keep `Navbar.jsx` rendering during the transition. Remove once Navbar is updated to use the native `profiles` / `activeProfile` names.
+- **N2** Legacy files still present despite being unused at runtime: `src/services/githubBackend.js`, `src/data/exercise_log.json`, `src/data/resource_links.json`. Safe to delete after data migration (FIX_PLAN C-17) succeeds.
+- **N3** `@octokit/rest` still in `package.json` dependencies. `npm uninstall @octokit/rest` once the legacy file is deleted.
+- **N4** Old `VITE_GH_TOKEN` GitHub Actions secret still exists in repo settings — should be deleted (nothing uses it).
+- **N5** Email-link sign-in fails clunkily when the link is opened on a different device (falls back to `window.prompt`). Documented; acceptable for v1.
+- **N6** Firestore listener cost is metered (1 read per existing doc on initial connect). With ~100 historical sessions × 2 users × 2 devices, expect ~400 reads per cold start. Far below the 50 k/day Spark limit, but mentioned for awareness.
+
+---
+
+---
+
 ## Table of Contents
 
 1. [Security](#1-security)

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { Flame, Clock, Activity, Trash2, Zap } from 'lucide-react';
 import { getCurrentStreak } from '../lib/streak';
+import { compareSessionsDesc, formatSessionDateTime, getSessionInstant } from '../lib/sessionTime';
 
 const CAT_MAP = {
   push: { emoji: '💪', cls: 'cat-push', label: 'Push' },
@@ -44,7 +45,7 @@ export default function Dashboard({ onGoLog }) {
   const { exerciseData, deleteExerciseLog, syncing } = useApp();
   const logs = useMemo(() => {
     const all = exerciseData?.logs || [];
-    return [...all].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+    return [...all].sort(compareSessionsDesc);
   }, [exerciseData]);
 
   const totalWorkouts = logs.length;
@@ -55,7 +56,10 @@ export default function Dashboard({ onGoLog }) {
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - weekStart.getDay());
     weekStart.setHours(0,0,0,0);
-    return logs.filter(l => l.date && new Date(l.date) >= weekStart).length;
+    return logs.filter(l => {
+      const instant = getSessionInstant(l);
+      return instant && instant >= weekStart;
+    }).length;
   }, [logs]);
 
   const recent = logs.slice(0, 8);
@@ -152,9 +156,7 @@ export default function Dashboard({ onGoLog }) {
             {recent.map(item => {
               const wt = item.workoutType || 'mixed';
               const cat = CAT_MAP[wt] || CAT_MAP.mixed;
-              const dateStr = item.date
-                ? new Date(item.date).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })
-                : '—';
+              const dateStr = formatSessionDateTime(item, { weekday: true });
               return (
                 <div key={item.id} className="session-card">
                   <div className="session-dot" style={{ background: 'rgba(255,107,53,0.12)' }}>

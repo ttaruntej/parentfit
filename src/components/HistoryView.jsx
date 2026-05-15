@@ -1,6 +1,13 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { Trash2, Search, X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import {
+  compareSessionsAsc,
+  compareSessionsDesc,
+  formatSessionDateTime,
+  getSessionDateKey,
+  getSessionInstant,
+} from '../lib/sessionTime';
 
 const CAT_MAP = {
   push:  { emoji: '💪', cls: 'cat-push',  label: 'Push' },
@@ -27,10 +34,8 @@ function buildHeatmap(logs) {
   const today = new Date(); today.setHours(0,0,0,0);
   const dayMap = {};
   logs.forEach(l => {
-    if (l.date) {
-      const k = formatDateKey(l.date);
-      if (k) dayMap[k] = (dayMap[k] || 0) + 1;
-    }
+    const k = getSessionDateKey(l);
+    if (k) dayMap[k] = (dayMap[k] || 0) + 1;
   });
   const cells = [];
   const cur = new Date(today);
@@ -96,9 +101,7 @@ function SessionCard({ item, onDelete, syncing }) {
       toggleExpanded();
     }
   };
-  const dateStr = item.date
-    ? new Date(item.date).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })
-    : '—';
+  const dateStr = formatSessionDateTime(item, { weekday: true });
 
   return (
     <div
@@ -202,8 +205,8 @@ export default function HistoryView() {
     }
 
     return [...result].sort((a, b) => {
-      if (sort === 'newest') return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
-      if (sort === 'oldest') return new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime();
+      if (sort === 'newest') return compareSessionsDesc(a, b);
+      if (sort === 'oldest') return compareSessionsAsc(a, b);
       if (sort === 'longest') return (b.durationMinutes || 0) - (a.durationMinutes || 0);
       if (sort === 'shortest') return (a.durationMinutes || 0) - (b.durationMinutes || 0);
       return 0;
@@ -214,7 +217,7 @@ export default function HistoryView() {
   const grouped = useMemo(() => {
     const groups = {};
     filtered.forEach(l => {
-      const d = l.date ? new Date(l.date) : null;
+      const d = getSessionInstant(l);
       let key = 'Unknown date';
       if (d) {
         const now = new Date(); now.setHours(0,0,0,0);
