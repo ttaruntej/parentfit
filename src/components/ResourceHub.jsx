@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { Play, Plus, Trash2, Video, Headphones, FileText, ExternalLink, Search, X } from 'lucide-react';
 import { isPlayable, parseMediaUrl } from '../lib/url';
@@ -96,11 +96,23 @@ function AddModal({ onClose, onAdd, syncing }) {
 }
 
 export default function ResourceHub() {
-  const { resourceData, addResourceLink, deleteResourceLink, openPlayer, syncing } = useApp();
+  const {
+    resourceData,
+    resourceLoading,
+    ensureResourcesLoaded,
+    addResourceLink,
+    deleteResourceLink,
+    openPlayer,
+    syncing,
+  } = useApp();
   const resources = useMemo(() => resourceData?.resources || [], [resourceData]);
   const [showAdd, setShowAdd] = useState(false);
   const [query, setQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
+
+  useEffect(() => {
+    ensureResourcesLoaded();
+  }, [ensureResourcesLoaded]);
 
   const filtered = useMemo(() => {
     return resources.filter(r => {
@@ -142,7 +154,11 @@ export default function ResourceHub() {
       </div>
 
       {/* Resource cards grid */}
-      {filtered.length === 0 ? (
+      {resourceLoading ? (
+        <div className="card" style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          Loading resources...
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '2.5rem' }}>
           <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎬</div>
           <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>

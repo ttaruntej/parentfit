@@ -233,13 +233,14 @@ function profileWrite(uid, profile, importedAt, sessionCount) {
         name: profile.name,
         initials: profile.initials,
         color: profile.color,
+        createdAt: { __timestamp: importedAt },
         updatedAt: { __timestamp: importedAt },
         importedAt: { __timestamp: importedAt },
         sessionCount,
       }),
     },
     updateMask: {
-      fieldPaths: ['slug', 'name', 'initials', 'color', 'updatedAt', 'importedAt', 'sessionCount'],
+      fieldPaths: ['slug', 'name', 'initials', 'color', 'createdAt', 'updatedAt', 'importedAt', 'sessionCount'],
     },
   };
 }

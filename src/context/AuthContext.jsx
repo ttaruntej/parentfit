@@ -6,7 +6,7 @@ import {
   signInWithEmailLink,
   signOut as fbSignOut,
 } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth } from '../lib/firebaseAuth';
 
 const AuthContext = createContext(null);
 const STORED_EMAIL_KEY = 'parentfit_emailForSignIn';

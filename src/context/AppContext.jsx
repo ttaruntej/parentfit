@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import {
   listProfiles, createProfile,
@@ -21,6 +21,8 @@ export const AppProvider = ({ children }) => {
   const [exerciseData, setExerciseData] = useState({ logs: [] });
   const [resourceData, setResourceData] = useState({ resources: [] });
   const [loading, setLoading] = useState(true);
+  const [resourceLoading, setResourceLoading] = useState(false);
+  const [resourcesEnabled, setResourcesEnabled] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -45,9 +47,12 @@ export const AppProvider = ({ children }) => {
         const ps = await listProfiles();
         if (cancelled) return;
         setProfiles(ps);
-        if (!activeProfileId && ps[0]) {
-          setActiveProfileId(ps[0].id);
-          localStorage.setItem(ACTIVE_PROFILE_KEY, ps[0].id);
+        const nextProfileId = activeProfileId && ps.some((p) => p.id === activeProfileId)
+          ? activeProfileId
+          : ps[0]?.id || null;
+        if (nextProfileId && nextProfileId !== activeProfileId) {
+          setActiveProfileId(nextProfileId);
+          localStorage.setItem(ACTIVE_PROFILE_KEY, nextProfileId);
         }
         if (ps.length === 0) setLoading(false);
       } catch (e) {
@@ -63,21 +68,29 @@ export const AppProvider = ({ children }) => {
     if (!user || !activeProfileId) return;
     setLoading(true);
 
-    let sessionsReady = false;
-    let resourcesReady = false;
-    const finish = () => { if (sessionsReady && resourcesReady) setLoading(false); };
-
     const unsubA = subscribeSessions(activeProfileId, (logs) => {
       setExerciseData({ logs });
-      sessionsReady = true; finish();
-    });
-    const unsubB = subscribeResources(activeProfileId, (resources) => {
-      setResourceData({ resources });
-      resourcesReady = true; finish();
+      setLoading(false);
     });
 
-    return () => { unsubA(); unsubB(); };
+    return () => { unsubA(); };
   }, [user, activeProfileId]);
+
+  useEffect(() => {
+    if (!user || !activeProfileId || !resourcesEnabled) return undefined;
+    setResourceLoading(true);
+
+    const unsubscribe = subscribeResources(activeProfileId, (resources) => {
+      setResourceData({ resources });
+      setResourceLoading(false);
+    });
+
+    return () => { unsubscribe(); };
+  }, [user, activeProfileId, resourcesEnabled]);
+
+  const ensureResourcesLoaded = useCallback(() => {
+    setResourcesEnabled(true);
+  }, []);
 
   const addExerciseLog = async (newLog) => {
     if (!activeProfileId) return;
@@ -138,6 +151,8 @@ export const AppProvider = ({ children }) => {
   const switchProfile = (profileId) => {
     setActiveProfileId(profileId);
     localStorage.setItem(ACTIVE_PROFILE_KEY, profileId);
+    setResourceData({ resources: [] });
+    setResourcesEnabled(false);
   };
 
   const addProfile = async (input) => {
@@ -159,12 +174,13 @@ export const AppProvider = ({ children }) => {
   return (
     <AppContext.Provider value={{
       exerciseData, resourceData,
-      loading, syncing, error, successMsg,
+      loading, resourceLoading, syncing, error, successMsg,
       mediaPlayer, isSettingsOpen, setIsSettingsOpen,
       profiles, activeProfile, activeProfileId,
       switchProfile, addProfile,
       addExerciseLog, deleteExerciseLog,
       addResourceLink, deleteResourceLink,
+      ensureResourcesLoaded,
       forceManualSync,
       openPlayer, closePlayer,
     }}>

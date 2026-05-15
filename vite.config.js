@@ -9,6 +9,22 @@ export default defineConfig(() => {
   return {
     plugins: [react()],
     base,
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            const normalized = id.replace(/\\/g, '/');
+            if (normalized.includes('/@firebase/firestore') || normalized.includes('/firebase/firestore') || normalized.includes('/@firebase/webchannel-wrapper')) return 'firestore';
+            if (normalized.includes('/@firebase/auth') || normalized.includes('/firebase/auth')) return 'firebase-auth';
+            if (normalized.includes('/@firebase/') || normalized.includes('/firebase/') || normalized.includes('/idb/')) return 'firebase-core';
+            if (normalized.includes('/react')) return 'react';
+            if (normalized.includes('/lucide-react/')) return 'icons';
+            return 'vendor';
+          },
+        },
+      },
+    },
     test: {
       environment: 'jsdom',
       setupFiles: './src/test/setup.js',

@@ -2,7 +2,8 @@ import {
   collection, doc, addDoc, deleteDoc, getDocs,
   query, orderBy, onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import { auth } from '../lib/firebaseAuth';
+import { db } from '../lib/firebaseDb';
 
 const uid = () => {
   const u = auth.currentUser?.uid;
@@ -18,8 +19,10 @@ const sessionDoc  = (profileId, id) => doc(db, 'users', uid(), 'profiles', profi
 const resourceDoc = (profileId, id) => doc(db, 'users', uid(), 'profiles', profileId, 'resources', id);
 
 export async function listProfiles() {
-  const snap = await getDocs(query(profilesCol(), orderBy('createdAt', 'asc')));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const snap = await getDocs(profilesCol());
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => String(a['name'] || '').localeCompare(String(b['name'] || '')));
 }
 
 export async function createProfile({ slug, name, initials, color }) {
