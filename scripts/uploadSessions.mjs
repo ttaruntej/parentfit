@@ -65,20 +65,28 @@ async function run() {
     const profileId = slugToId[profileSlug];
     const docId = session.id;
     
-    // Convert performedAt to actual timestamp roughly for sorting if needed, but we just use new Date
-    const payload = {
-      ...session,
-      createdAt: new Date().toISOString()
-    };
+    const payload = { ...session };
     
-    const firestoreData = { fields: toFirestore(payload).mapValue.fields };
-    firestoreData.fields.createdAt = { timestampValue: new Date().toISOString() };
+    const firestoreData = { fields: {} };
+    if (session.performedAt) {
+      firestoreData.fields.performedAtTs = { timestampValue: new Date(session.performedAt).toISOString() };
+    } else if (session.date) {
+      firestoreData.fields.performedAtTs = { timestampValue: new Date(session.date).toISOString() };
+    } else {
+      firestoreData.fields.performedAtTs = { timestampValue: new Date().toISOString() };
+    }
     
-    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/profiles/${profileId}/sessions?documentId=${docId}`;
+    if (session.sourceMessageAt) {
+      firestoreData.fields.sourceMessageAtTs = { timestampValue: new Date(session.sourceMessageAt).toISOString() };
+    }
+
+    // Use PATCH with updateMask so we only touch performedAtTs and sourceMessageAtTs
+    const updateMasks = Object.keys(firestoreData.fields).map(k => `updateMask.fieldPaths=${k}`).join('&');
+    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/profiles/${profileId}/sessions/${docId}?${updateMasks}`;
     
     try {
       const res = await fetch(url, {
-        method: 'POST',
+        method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -88,15 +96,10 @@ async function run() {
       
       if (!res.ok) {
         const text = await res.text();
-        if (res.status === 409) {
-           console.log(`  - [SKIP] Session ${docId} already exists`);
-           successCount++;
-        } else {
-           console.error(`  - [ERROR] Failed to upload ${docId}: ${res.status} ${text}`);
-           failCount++;
-        }
+        console.error(`  - [ERROR] Failed to PATCH ${docId}: ${res.status} ${text}`);
+        failCount++;
       } else {
-        console.log(`  - [OK] Uploaded ${docId} to true profile ${profileId}`);
+        console.log(`  - [OK] Patched timestamps for ${docId} in profile ${profileId}`);
         successCount++;
       }
     } catch (err) {
