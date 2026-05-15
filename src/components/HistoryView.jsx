@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
-import { Trash2, Search, X, ChevronRight, SlidersHorizontal, Image as ImageIcon, Download } from 'lucide-react';
+import { Trash2, Search, X, ChevronLeft, ChevronRight, SlidersHorizontal, Image as ImageIcon, Download } from 'lucide-react';
 import {
   compareSessionsAsc,
   compareSessionsDesc,
@@ -102,34 +102,65 @@ function DayCell({ cell, selected, onPick }) {
 
 function Heatmap({ logs, selectedDate, onPickDate }) {
   const months = useMemo(() => buildMonths(logs), [logs]);
+  const [idx, setIdx] = useState(0); // 0 = current month, higher = older
+
+  if (months.length === 0) return null;
+  const safeIdx = Math.min(idx, months.length - 1);
+  const mo = months[safeIdx];
 
   return (
     <div className="card">
       <div className="section-header">
         <span className="section-title">Activity Calendar</span>
-        <span className="text-xs text-dim">Tap a day to filter</span>
+        {selectedDate ? (
+          <button
+            type="button"
+            onClick={() => onPickDate(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fire)', fontSize: '0.75rem', fontWeight: 600 }}
+          >
+            Clear day
+          </button>
+        ) : (
+          <span className="text-xs text-dim">Tap a day to filter</span>
+        )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
-        {months.map((mo) => (
-          <div key={mo.key}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
-              {mo.label}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-              {WEEKDAYS.map((w, i) => (
-                <div key={`wd-${i}`} style={{ fontSize: '0.58rem', textAlign: 'center', color: 'var(--text-tertiary)', paddingBottom: 2 }}>
-                  {w}
-                </div>
-              ))}
-              {mo.cells.map((c, i) => (
-                c === null
-                  ? <div key={`b-${i}`} />
-                  : <DayCell key={c.date} cell={c} selected={selectedDate === c.date} onPick={onPickDate} />
-              ))}
-            </div>
+
+      {/* Month navigation — one month at a time */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+        <button
+          type="button"
+          onClick={() => setIdx((i) => Math.min(i + 1, months.length - 1))}
+          disabled={safeIdx >= months.length - 1}
+          className="btn btn-ghost btn-icon"
+          aria-label="Previous month"
+        >
+          <ChevronLeft size={16} />
+        </button>
+        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>{mo.label}</span>
+        <button
+          type="button"
+          onClick={() => setIdx((i) => Math.max(i - 1, 0))}
+          disabled={safeIdx <= 0}
+          className="btn btn-ghost btn-icon"
+          aria-label="Next month"
+        >
+          <ChevronRight size={16} />
+        </button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+        {WEEKDAYS.map((w, i) => (
+          <div key={`wd-${i}`} style={{ fontSize: '0.58rem', textAlign: 'center', color: 'var(--text-tertiary)', paddingBottom: 2 }}>
+            {w}
           </div>
         ))}
+        {mo.cells.map((c, i) => (
+          c === null
+            ? <div key={`b-${i}`} />
+            : <DayCell key={c.date} cell={c} selected={selectedDate === c.date} onPick={onPickDate} />
+        ))}
       </div>
+
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.75rem', justifyContent: 'flex-end' }}>
         <span className="text-xs text-dim">Less</span>
         {['', 'd1', 'd2', 'd3'].map((d) => (
@@ -268,7 +299,13 @@ export default function HistoryView() {
   }, [filtered]);
 
   const hasFilters = query || filter !== 'all' || dateFilter;
-  const clearFilters = useCallback(() => { setQuery(''); setFilter('all'); setDateFilter(null); }, []);
+  // Clearing filters also restores the default newest-first order.
+  const clearFilters = useCallback(() => {
+    setQuery('');
+    setFilter('all');
+    setDateFilter(null);
+    setSort('newest');
+  }, []);
   const selected = useMemo(() => allLogs.find(l => l.id === selectedId) || null, [allLogs, selectedId]);
 
   const dateFilterLabel = useMemo(() => {
