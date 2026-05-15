@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../context/AppContext';
-import { Play, Plus, Trash2, Video, Headphones, FileText, ExternalLink, Search, X } from 'lucide-react';
+import { Play, Plus, Pencil, Trash2, Video, Headphones, FileText, ExternalLink, Search, X } from 'lucide-react';
 import { isPlayable, parseMediaUrl } from '../lib/url';
 
 const TYPE_ICON = { video: Video, audio: Headphones, article: FileText };
@@ -29,29 +30,29 @@ function VideoThumb({ url, type }) {
   );
 }
 
-function AddModal({ onClose, onAdd, syncing }) {
-  const [url, setUrl] = useState('');
-  const [title, setTitle] = useState('');
-  const [type, setType] = useState('video');
-  const [tags, setTags] = useState('');
+// Add a new resource, or edit an existing one when `initial` is provided.
+function ResourceModal({ initial, onClose, onSave, syncing }) {
+  const isEdit = !!initial;
+  const [url, setUrl] = useState(initial?.url || '');
+  const [title, setTitle] = useState(initial?.title || '');
+  const [type, setType] = useState(initial?.type || 'video');
+  const [tags, setTags] = useState((initial?.tags || []).join(', '));
 
   const handleSubmit = async e => {
     e.preventDefault();
     if (!url.trim()) return;
-    await onAdd({
-      id: `res_${Date.now()}`,
+    await onSave({
       title: title.trim() || (url.includes('youtube') ? 'YouTube Fitness Video' : 'Fitness Resource'),
       url: url.trim(),
       type,
-      addedAt: new Date().toISOString(),
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
     });
     onClose();
   };
 
-  return (
+  return createPortal(
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 400,
+      position: 'fixed', inset: 0, zIndex: 1100,
       background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
     }} onClick={e => e.target === e.currentTarget && onClose()}>
@@ -60,7 +61,9 @@ function AddModal({ onClose, onAdd, syncing }) {
         borderBottom: 'none', padding: '1.5rem', animation: 'slideUp 0.25s ease',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-          <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.1rem' }}>Add Resource</h3>
+          <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1.1rem' }}>
+            {isEdit ? 'Edit Resource' : 'Add Resource'}
+          </h3>
           <button type="button" onClick={onClose} className="btn btn-ghost btn-icon"><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
@@ -87,11 +90,13 @@ function AddModal({ onClose, onAdd, syncing }) {
             </div>
           </div>
           <button type="submit" disabled={syncing} className="btn btn-fire btn-full" style={{ marginTop: '0.25rem' }}>
-            {syncing ? '⏳ Saving...' : '+ Add Resource'}
+            {syncing ? '⏳ Saving...' : (isEdit ? 'Save changes' : '+ Add Resource')}
           </button>
         </form>
       </div>
-    </div>
+      <style>{`@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+    </div>,
+    document.body,
   );
 }
 
@@ -101,12 +106,13 @@ export default function ResourceHub() {
     resourceLoading,
     ensureResourcesLoaded,
     addResourceLink,
+    updateResourceLink,
     deleteResourceLink,
     openPlayer,
     syncing,
   } = useApp();
   const resources = useMemo(() => resourceData?.resources || [], [resourceData]);
-  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null); // null = closed, 'new' = add, object = edit
   const [query, setQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
 
@@ -122,6 +128,18 @@ export default function ResourceHub() {
       return matchType && matchQ;
     });
   }, [resources, query, filterType]);
+
+  const handleSave = async (fields) => {
+    if (editing && editing !== 'new') {
+      await updateResourceLink(editing.id, fields);
+    } else {
+      await addResourceLink({
+        id: `res_${Date.now()}`,
+        addedAt: new Date().toISOString(),
+        ...fields,
+      });
+    }
+  };
 
   return (
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -164,7 +182,7 @@ export default function ResourceHub() {
           <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
             {query ? `No results for "${query}"` : 'No resources saved yet.'}
           </div>
-          <button className="btn btn-fire" onClick={() => setShowAdd(true)} style={{ marginTop: '1rem', borderRadius: 'var(--radius-sm)' }}>
+          <button className="btn btn-fire" onClick={() => setEditing('new')} style={{ marginTop: '1rem', borderRadius: 'var(--radius-sm)' }}>
             Add your first resource
           </button>
         </div>
@@ -182,9 +200,14 @@ export default function ResourceHub() {
                     <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color, background: bg, padding: '0.15rem 0.45rem', borderRadius: '999px' }}>
                       {item.type}
                     </span>
-                    <button onClick={() => deleteResourceLink(item.id)} disabled={syncing} className="btn btn-danger" style={{ padding: '0.1rem' }} title="Remove">
-                      <Trash2 size={12} />
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.2rem' }}>
+                      <button onClick={() => setEditing(item)} disabled={syncing} className="btn btn-ghost" style={{ padding: '0.1rem' }} title="Edit">
+                        <Pencil size={12} />
+                      </button>
+                      <button onClick={() => deleteResourceLink(item.id)} disabled={syncing} className="btn btn-danger" style={{ padding: '0.1rem' }} title="Remove">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                   <p style={{ fontSize: '0.8rem', fontWeight: 600, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {item.title}
@@ -216,7 +239,7 @@ export default function ResourceHub() {
 
       {/* FAB */}
       <button
-        onClick={() => setShowAdd(true)}
+        onClick={() => setEditing('new')}
         style={{
           position: 'fixed',
           bottom: 'calc(var(--nav-h) + 1rem)',
@@ -239,10 +262,14 @@ export default function ResourceHub() {
         <Plus size={22} strokeWidth={2.5} />
       </button>
 
-      {showAdd && <AddModal onClose={() => setShowAdd(false)} onAdd={addResourceLink} syncing={syncing} />}
-      <style>{`
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-      `}</style>
+      {editing !== null && (
+        <ResourceModal
+          initial={editing === 'new' ? null : editing}
+          onClose={() => setEditing(null)}
+          onSave={handleSave}
+          syncing={syncing}
+        />
+      )}
     </div>
   );
 }

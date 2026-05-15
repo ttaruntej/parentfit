@@ -226,6 +226,17 @@ export async function addResource(profileId, resource) {
   return { id: ref.id, ...resource, addedAt: payload.addedAt };
 }
 
+export async function updateResource(profileId, id, resource) {
+  await updateDoc(resourceDoc(profileId, id), {
+    title: resource.title,
+    url: resource.url,
+    type: resource.type || 'video',
+    tags: resource.tags || [],
+    updatedAt: serverTimestamp(),
+  });
+  return { id, ...resource };
+}
+
 export async function deleteResource(profileId, id) {
   await deleteDoc(resourceDoc(profileId, id));
 }

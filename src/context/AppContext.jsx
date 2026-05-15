@@ -3,7 +3,7 @@ import { useAuth } from './AuthContext';
 import {
   listProfiles, createProfile, setProfileAccess, deleteProfile, ADMIN_EMAIL,
   addSession, deleteSession,
-  addResource, deleteResource,
+  addResource, updateResource, deleteResource,
   subscribeSessions, subscribeResources,
 } from '../services/dataAdapter';
 
@@ -134,6 +134,20 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const updateResourceLink = async (id, fields) => {
+    if (!activeProfileId) return;
+    setSyncing(true);
+    try {
+      await updateResource(activeProfileId, id, fields);
+      triggerSuccess('Resource updated');
+    } catch (e) {
+      console.error(e);
+      triggerError('Failed to update resource.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const deleteResourceLink = async (id) => {
     if (!window.confirm('Delete this resource?')) return;
     setSyncing(true);
@@ -201,7 +215,7 @@ export const AppProvider = ({ children }) => {
       profiles, activeProfile, activeProfileId, isAdmin,
       switchProfile, addProfile, updateProfileAccess, removeProfile,
       addExerciseLog, deleteExerciseLog,
-      addResourceLink, deleteResourceLink,
+      addResourceLink, updateResourceLink, deleteResourceLink,
       ensureResourcesLoaded,
       forceManualSync,
       openPlayer, closePlayer,
