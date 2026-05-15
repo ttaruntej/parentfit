@@ -57,7 +57,7 @@ export const AppProvider = ({ children }) => {
       }
     })();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, activeProfileId]);
 
   useEffect(() => {
     if (!user || !activeProfileId) return;
@@ -163,10 +163,6 @@ export const AppProvider = ({ children }) => {
       mediaPlayer, isSettingsOpen, setIsSettingsOpen,
       profiles, activeProfile, activeProfileId,
       switchProfile, addProfile,
-      users: profiles,
-      activeUserId: activeProfileId,
-      switchUser: switchProfile,
-      ghConfig: { token: 'firebase', owner: '', repo: '', branch: 'main' },
       addExerciseLog, deleteExerciseLog,
       addResourceLink, deleteResourceLink,
       forceManualSync,

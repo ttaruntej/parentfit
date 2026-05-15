@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { Flame, Clock, Activity, Trash2, ChevronRight, Zap } from 'lucide-react';
+import { Flame, Clock, Activity, Trash2, Zap } from 'lucide-react';
+import { getCurrentStreak } from '../lib/streak';
 
 const CAT_MAP = {
   push: { emoji: '💪', cls: 'cat-push', label: 'Push' },
@@ -39,35 +40,23 @@ function RingChart({ done, goal = 5 }) {
   );
 }
 
-function streak(logs) {
-  if (!logs.length) return 0;
-  const days = [...new Set(logs.map(l => l.date?.split('T')[0]).filter(Boolean))].sort().reverse();
-  let s = 0;
-  let prev = new Date(); prev.setHours(0,0,0,0);
-  for (const d of days) {
-    const cur = new Date(d);
-    const diff = Math.round((prev - cur) / 86400000);
-    if (diff <= 1) { s++; prev = cur; } else break;
-  }
-  return s;
-}
-
 export default function Dashboard({ onGoLog }) {
   const { exerciseData, deleteExerciseLog, syncing } = useApp();
   const logs = useMemo(() => {
     const all = exerciseData?.logs || [];
-    return [...all].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    return [...all].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
   }, [exerciseData]);
-  const isDemo = false;
 
   const totalWorkouts = logs.length;
-  const totalMins = logs.reduce((a, l) => a + (Number(l.durationMinutes) || 0), 0);
-  const curStreak = streak(logs);
+  const totalMins = useMemo(() => logs.reduce((a, l) => a + (Number(l.durationMinutes) || 0), 0), [logs]);
+  const curStreak = useMemo(() => getCurrentStreak(logs), [logs]);
 
-  // workouts this week
-  const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  weekStart.setHours(0,0,0,0);
-  const thisWeek = logs.filter(l => l.date && new Date(l.date) >= weekStart).length;
+  const thisWeek = useMemo(() => {
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    weekStart.setHours(0,0,0,0);
+    return logs.filter(l => l.date && new Date(l.date) >= weekStart).length;
+  }, [logs]);
 
   const recent = logs.slice(0, 8);
 
@@ -78,7 +67,7 @@ export default function Dashboard({ onGoLog }) {
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
       {/* Hero */}
-      <div className="hero-banner" style={{ paddingBottom: isDemo ? '0.75rem' : '1.25rem' }}>
+      <div className="hero-banner" style={{ paddingBottom: '1.25rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ fontSize: '0.78rem', color: 'var(--fire-light)', fontWeight: 600, marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -88,18 +77,6 @@ export default function Dashboard({ onGoLog }) {
               Ready to move today?
             </h2>
           </div>
-          {isDemo && (
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              style={{
-                background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)',
-                borderRadius: '999px', padding: '0.3rem 0.75rem', fontSize: '0.7rem',
-                fontWeight: 700, color: '#F59E0B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem'
-              }}
-            >
-              <Zap size={10} /> Activate Sync
-            </button>
-          )}
         </div>
 
         <div className="ring-chart-wrap">

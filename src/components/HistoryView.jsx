@@ -17,20 +17,26 @@ const SORT_OPTIONS = [
   { value: 'shortest', label: 'Shortest session' },
 ];
 
+function formatDateKey(value) {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function buildHeatmap(logs) {
   const today = new Date(); today.setHours(0,0,0,0);
   const dayMap = {};
   logs.forEach(l => {
     if (l.date) {
-      const k = l.date.split('T')[0];
-      dayMap[k] = (dayMap[k] || 0) + 1;
+      const k = formatDateKey(l.date);
+      if (k) dayMap[k] = (dayMap[k] || 0) + 1;
     }
   });
   const cells = [];
   const cur = new Date(today);
   cur.setDate(today.getDate() - 83);
   while (cur <= today) {
-    const k = cur.toISOString().split('T')[0];
+    const k = formatDateKey(cur);
     cells.push({ date: k, count: dayMap[k] || 0 });
     cur.setDate(cur.getDate() + 1);
   }
@@ -83,12 +89,27 @@ function Heatmap({ logs }) {
 function SessionCard({ item, onDelete, syncing }) {
   const [expanded, setExpanded] = useState(false);
   const cat = CAT_MAP[item.workoutType] || CAT_MAP.mixed;
+  const toggleExpanded = () => setExpanded(v => !v);
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleExpanded();
+    }
+  };
   const dateStr = item.date
     ? new Date(item.date).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })
     : '—';
 
   return (
-    <div className="session-card" style={{ flexDirection: 'column', gap: 0, cursor: 'pointer' }} onClick={() => setExpanded(v => !v)}>
+    <div
+      className="session-card"
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      style={{ flexDirection: 'column', gap: 0, cursor: 'pointer' }}
+      onClick={toggleExpanded}
+      onKeyDown={handleKeyDown}
+    >
       {/* Main row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.875rem', width: '100%' }}>
         <div className="session-dot" style={{ background: 'rgba(255,107,53,0.12)', flexShrink: 0 }}>{cat.emoji}</div>
@@ -159,14 +180,14 @@ export default function HistoryView() {
   const [sort, setSort] = useState('newest');
   const [showSort, setShowSort] = useState(false);
 
-  const FILTERS = [
+  const FILTERS = useMemo(() => [
     { v: 'all',   label: 'All',   count: allLogs.length },
     { v: 'push',  label: '💪 Push',  count: allLogs.filter(l => l.workoutType === 'push').length },
     { v: 'pull',  label: '🏋️ Pull',  count: allLogs.filter(l => l.workoutType === 'pull').length },
     { v: 'legs',  label: '🦵 Legs',  count: allLogs.filter(l => l.workoutType === 'legs').length },
     { v: 'hiit',  label: '⚡ HIIT',  count: allLogs.filter(l => l.workoutType === 'hiit').length },
     { v: 'mixed', label: '🔀 Mixed', count: allLogs.filter(l => l.workoutType === 'mixed').length },
-  ];
+  ], [allLogs]);
 
   const filtered = useMemo(() => {
     let result = filter === 'all' ? allLogs : allLogs.filter(l => l.workoutType === filter);
@@ -181,8 +202,8 @@ export default function HistoryView() {
     }
 
     return [...result].sort((a, b) => {
-      if (sort === 'newest') return new Date(b.date || 0) - new Date(a.date || 0);
-      if (sort === 'oldest') return new Date(a.date || 0) - new Date(b.date || 0);
+      if (sort === 'newest') return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
+      if (sort === 'oldest') return new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime();
       if (sort === 'longest') return (b.durationMinutes || 0) - (a.durationMinutes || 0);
       if (sort === 'shortest') return (a.durationMinutes || 0) - (b.durationMinutes || 0);
       return 0;
@@ -197,7 +218,7 @@ export default function HistoryView() {
       let key = 'Unknown date';
       if (d) {
         const now = new Date(); now.setHours(0,0,0,0);
-        const diffDays = Math.floor((now - d) / 86400000);
+        const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
         if (diffDays < 7) key = 'This Week';
         else if (diffDays < 14) key = 'Last Week';
         else if (diffDays < 31) key = 'This Month';

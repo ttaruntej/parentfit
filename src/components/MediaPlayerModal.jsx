@@ -1,34 +1,20 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { X } from 'lucide-react';
+import { parseMediaUrl } from '../lib/url';
 
 export default function MediaPlayerModal() {
   const { mediaPlayer, closePlayer } = useApp();
-  const { isOpen, url, title, type } = mediaPlayer;
+  const { isOpen, url, title } = mediaPlayer;
 
   if (!isOpen) return null;
 
-  // Transform YouTube / normal links cleanly to valid embed URL
-  let embedUrl = url;
-  let isIframe = true;
-  let isHtmlVideo = url.endsWith('.mp4');
-  let isHtmlAudio = url.endsWith('.mp3');
-
-  if (url.includes('youtube.com/watch?v=')) {
-    const videoId = url.split('v=')[1]?.split('&')[0];
-    if (videoId) embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
-  } else if (url.includes('youtu.be/')) {
-    const videoId = url.split('youtu.be/')[1]?.split('?')[0];
-    if (videoId) embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
-  } else if (url.includes('vimeo.com/')) {
-    const videoId = url.split('vimeo.com/')[1];
-    if (videoId) embedUrl = `https://player.vimeo.com/video/${videoId}?autoplay=1`;
-  } else if (url.includes('facebook.com')) {
-    // Official Facebook embed video plugin formatting
-    embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false&width=500`;
-  } else if (isHtmlVideo || isHtmlAudio) {
-    isIframe = false;
-  }
+  const media = parseMediaUrl(url);
+  const isIframe = ['youtube', 'vimeo', 'facebook'].includes(media?.kind);
+  const isHtmlVideo = media?.kind === 'mp4';
+  const isHtmlAudio = media?.kind === 'mp3';
+  const embedUrl = media?.embed;
+  const sourceUrl = media?.src || url;
 
   return (
     <div 
@@ -80,7 +66,11 @@ export default function MediaPlayerModal() {
           borderRadius: '0.5rem',
           overflow: 'hidden'
         }}>
-          {isIframe ? (
+          {!media ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              This resource cannot be played inline.
+            </div>
+          ) : isIframe ? (
             <iframe
               src={embedUrl}
               title={title}
@@ -97,7 +87,7 @@ export default function MediaPlayerModal() {
             />
           ) : isHtmlVideo ? (
             <video 
-              src={url} 
+              src={sourceUrl} 
               controls 
               autoPlay 
               style={{
@@ -108,11 +98,11 @@ export default function MediaPlayerModal() {
                 height: '100%'
               }}
             />
-          ) : (
+          ) : isHtmlAudio ? (
             <div style={{ padding: '2rem', textAlign: 'center' }}>
-              <audio src={url} controls autoPlay style={{ width: '100%' }} />
+              <audio src={sourceUrl} controls autoPlay style={{ width: '100%' }} />
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Permanent Fallback Launch Helper */}

@@ -12,6 +12,10 @@ import SettingsModal from './components/SettingsModal';
 import SignIn from './components/SignIn';
 import ProfileSetup from './components/ProfileSetup';
 import { CheckCircle, AlertTriangle, Dumbbell } from 'lucide-react';
+import microWorkoutsImg from './assets/content/micro_workouts.png';
+import dadStrengthImg from './assets/content/dad_strength.png';
+import nutritionImg from './assets/content/nutrition.png';
+import familyFitnessImg from './assets/content/family_fitness.png';
 
 
 function KnowledgeCard({ title, desc, tag, img }) {
@@ -33,25 +37,25 @@ function MorePage() {
       title: "Micro-Workouts",
       desc: "5-15 min bursts for busy schedules. No gym required.",
       tag: "Efficiency",
-      img: "./src/assets/content/micro_workouts.png"
+      img: microWorkoutsImg
     },
     {
       title: "Functional Dad Strength",
       desc: "Compound lifts to make parenting effortless.",
       tag: "Strength",
-      img: "./src/assets/content/dad_strength.png"
+      img: dadStrengthImg
     },
     {
       title: "Energy Nutrition",
       desc: "Fuel your day with protein-focused meal prep.",
       tag: "Nutrition",
-      img: "./src/assets/content/nutrition.png"
+      img: nutritionImg
     },
     {
       title: "Family Adventure",
       desc: "Turn outdoor time into a family fitness journey.",
       tag: "Lifestyle",
-      img: "./src/assets/content/family_fitness.png"
+      img: familyFitnessImg
     }
   ];
 

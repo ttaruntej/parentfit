@@ -1,24 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { Play, Plus, Trash2, Video, Headphones, FileText, ExternalLink, Search, X } from 'lucide-react';
+import { isPlayable, parseMediaUrl } from '../lib/url';
 
 const TYPE_ICON = { video: Video, audio: Headphones, article: FileText };
 const TYPE_COLOR = { video: 'var(--fire)', audio: '#A78BFA', article: 'var(--teal)' };
 const TYPE_BG = { video: 'rgba(255,107,53,0.12)', audio: 'rgba(124,58,237,0.12)', article: 'rgba(0,200,150,0.12)' };
 
 function VideoThumb({ url, type }) {
-  let yt = null;
-  if (url.includes('youtube.com') || url.includes('youtu.be')) {
-    const m = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/);
-    if (m) yt = m[1];
-  }
+  const media = parseMediaUrl(url);
+  const yt = media?.kind === 'youtube' ? media.id : null;
   const Icon = TYPE_ICON[type] || Video;
   return (
     <div className="resource-thumb">
       {yt
         ? <img src={`https://img.youtube.com/vi/${yt}/mqdefault.jpg`} alt="thumb"
             style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
-            onError={e => { e.target.style.display = 'none'; }} />
+            onError={e => { e.currentTarget.style.display = 'none'; }} />
         : <Icon size={32} className="resource-thumb-icon" />
       }
       {yt && (
@@ -99,7 +97,7 @@ function AddModal({ onClose, onAdd, syncing }) {
 
 export default function ResourceHub() {
   const { resourceData, addResourceLink, deleteResourceLink, openPlayer, syncing } = useApp();
-  const resources = resourceData?.resources || [];
+  const resources = useMemo(() => resourceData?.resources || [], [resourceData]);
   const [showAdd, setShowAdd] = useState(false);
   const [query, setQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -112,10 +110,6 @@ export default function ResourceHub() {
       return matchType && matchQ;
     });
   }, [resources, query, filterType]);
-
-  const isPlayable = url =>
-    url.includes('youtube.com') || url.includes('youtu.be') ||
-    url.includes('vimeo.com') || url.endsWith('.mp4') || url.endsWith('.mp3');
 
   return (
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

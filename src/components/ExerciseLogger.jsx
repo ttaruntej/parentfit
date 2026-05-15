@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { CheckCircle2, Plus, Minus, ChevronDown, ChevronUp } from 'lucide-react';
+import { WORKOUT_CATEGORY } from '../lib/workoutTypes';
 
 const TYPES = [
   { value: 'push',  emoji: '💪', name: 'Push Day',    desc: 'Chest · Shoulders · Triceps' },
@@ -136,6 +137,8 @@ function ExStep({ exercises, onUpdate, onAddEx, onRemoveEx, onAddSet, onRemoveSe
                     <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', paddingTop: '0.4rem' }}>S{si + 1}</span>
                     <input
                       type="number" min="0" step="0.5"
+                      inputMode="decimal"
+                      pattern="[0-9]*\\.?[0-9]*"
                       className="input input-sm"
                       placeholder="kg"
                       value={s.bodyweight ? '' : s.weight_kg}
@@ -145,6 +148,7 @@ function ExStep({ exercises, onUpdate, onAddEx, onRemoveEx, onAddSet, onRemoveSe
                     />
                     <input
                       type="number" min="0"
+                      inputMode="numeric"
                       className="input input-sm"
                       placeholder="reps"
                       value={s.reps}
@@ -180,7 +184,7 @@ function ExStep({ exercises, onUpdate, onAddEx, onRemoveEx, onAddSet, onRemoveSe
 }
 
 // Step 3 — finish
-function FinishStep({ duration, setDuration, notes, setNotes, workoutType, syncing }) {
+function FinishStep({ duration, setDuration, notes, setNotes, workoutType, syncing, canSubmit }) {
   const t = TYPES.find(t => t.value === workoutType);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -222,14 +226,20 @@ function FinishStep({ duration, setDuration, notes, setNotes, workoutType, synci
 
       <button
         type="submit"
-        disabled={syncing}
+        disabled={syncing || !canSubmit}
         className="btn btn-fire btn-full"
+        title={!canSubmit ? 'Add at least one named exercise before saving.' : undefined}
       >
         {syncing
           ? '⏳ Saving...'
           : <><CheckCircle2 size={18} /> Log {t?.name || 'Session'}</>
         }
       </button>
+      {!canSubmit && (
+        <p style={{ marginTop: '-0.75rem', color: 'var(--text-tertiary)', fontSize: '0.78rem', textAlign: 'center' }}>
+          Add at least one named exercise before saving.
+        </p>
+      )}
     </div>
   );
 }
@@ -241,6 +251,7 @@ export default function ExerciseLogger() {
   const [exercises, setExercises] = useState([emptyEx()]);
   const [duration, setDuration] = useState(45);
   const [notes, setNotes] = useState('');
+  const canSubmit = exercises.some(ex => ex.name.trim());
 
   const updateSet = (ei, si, field, val) =>
     setExercises(prev => prev.map((ex, i) => {
@@ -258,20 +269,26 @@ export default function ExerciseLogger() {
 
   const handleSubmit = async e => {
     e.preventDefault();
+    const namedExercises = exercises.filter(ex => ex.name.trim());
+    if (namedExercises.length === 0) {
+      alert('Add at least one named exercise before saving.');
+      return;
+    }
+
     const typeInfo = TYPES.find(t => t.value === workoutType) || TYPES[4];
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
     const payload = {
       id: `session_${Date.now()}`,
-      date: `${today}T06:00:00+05:30`,
-      dayOfWeek: new Date().toLocaleDateString('en-US', { weekday: 'long' }),
+      date: now.toISOString(),
+      dayOfWeek: now.toLocaleDateString('en-US', { weekday: 'long' }),
       workoutType,
-      category: typeInfo.name,
-      title: `${typeInfo.emoji} ${typeInfo.name} — ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`,
+      category: WORKOUT_CATEGORY[workoutType] || WORKOUT_CATEGORY.mixed,
+      title: `${typeInfo.emoji} ${typeInfo.name} — ${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`,
       durationMinutes: duration,
       intensity: workoutType === 'hiit' ? 'High' : 'Moderate',
       notes: notes.trim(),
-      exercises: exercises
-        .filter(ex => ex.name.trim())
+      exercises: namedExercises
         .map(ex => ({
           name: ex.name.trim(),
           rawName: ex.name.trim(),
@@ -286,7 +303,11 @@ export default function ExerciseLogger() {
     };
 
     await addExerciseLog(payload);
-    setNotes(''); setExercises([emptyEx()]); setDuration(45); setStep(0);
+    setNotes('');
+    setExercises([emptyEx()]);
+    setDuration(45);
+    setWorkoutType('push');
+    setStep(0);
   };
 
   const steps = [
@@ -346,7 +367,15 @@ export default function ExerciseLogger() {
           />
         )}
         {step === 2 && (
-          <FinishStep duration={duration} setDuration={setDuration} notes={notes} setNotes={setNotes} workoutType={workoutType} syncing={syncing} />
+          <FinishStep
+            duration={duration}
+            setDuration={setDuration}
+            notes={notes}
+            setNotes={setNotes}
+            workoutType={workoutType}
+            syncing={syncing}
+            canSubmit={canSubmit}
+          />
         )}
       </div>
 
