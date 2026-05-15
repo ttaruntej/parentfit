@@ -8,15 +8,15 @@ import {
 } from '../services/dataAdapter';
 
 const AppContext = createContext(null);
-const ACTIVE_PROFILE_KEY = 'parentfit_active_profile';
 
 export const AppProvider = ({ children }) => {
   const { user } = useAuth();
 
   const [profiles, setProfiles] = useState([]);
-  const [activeProfileId, setActiveProfileId] = useState(
-    () => localStorage.getItem(ACTIVE_PROFILE_KEY) || null
-  );
+  // Not persisted to localStorage on purpose: a browser-wide key would leak
+  // one account's active profile to the next person who signs in on the same
+  // device. It is always (re)derived from the freshly loaded profile list.
+  const [activeProfileId, setActiveProfileId] = useState(null);
   // Latest activeProfileId, readable inside the loader effect without making
   // it a dependency — so switching/creating a profile never re-fetches.
   const activeProfileIdRef = useRef(activeProfileId);
@@ -65,8 +65,6 @@ export const AppProvider = ({ children }) => {
             : ps[0]?.id || null;
           if (nextProfileId !== current) {
             setActiveProfileId(nextProfileId);
-            if (nextProfileId) localStorage.setItem(ACTIVE_PROFILE_KEY, nextProfileId);
-            else localStorage.removeItem(ACTIVE_PROFILE_KEY);
           }
           if (ps.length === 0) setLoading(false);
           return;
@@ -83,7 +81,13 @@ export const AppProvider = ({ children }) => {
   }, [user]);
 
   useEffect(() => {
-    if (!user || !activeProfileId) return;
+    // Only ever subscribe to a profile that belongs to the signed-in user —
+    // never to a stale id. This is the hard guarantee against showing one
+    // account another account's data.
+    if (!user || !activeProfileId || !profiles.some((p) => p.id === activeProfileId)) {
+      setExerciseData({ logs: [] });
+      return undefined;
+    }
     setLoading(true);
 
     const unsubA = subscribeSessions(activeProfileId, (logs) => {
@@ -92,10 +96,13 @@ export const AppProvider = ({ children }) => {
     });
 
     return () => { unsubA(); };
-  }, [user, activeProfileId]);
+  }, [user, activeProfileId, profiles]);
 
   useEffect(() => {
-    if (!user || !activeProfileId || !resourcesEnabled) return undefined;
+    if (!user || !activeProfileId || !resourcesEnabled
+      || !profiles.some((p) => p.id === activeProfileId)) {
+      return undefined;
+    }
     setResourceLoading(true);
 
     const unsubscribe = subscribeResources(activeProfileId, (resources) => {
@@ -104,7 +111,7 @@ export const AppProvider = ({ children }) => {
     });
 
     return () => { unsubscribe(); };
-  }, [user, activeProfileId, resourcesEnabled]);
+  }, [user, activeProfileId, resourcesEnabled, profiles]);
 
   const ensureResourcesLoaded = useCallback(() => {
     setResourcesEnabled(true);
@@ -182,7 +189,7 @@ export const AppProvider = ({ children }) => {
 
   const switchProfile = (profileId) => {
     setActiveProfileId(profileId);
-    localStorage.setItem(ACTIVE_PROFILE_KEY, profileId);
+    setExerciseData({ logs: [] });
     setResourceData({ resources: [] });
     setResourcesEnabled(false);
   };
@@ -190,7 +197,8 @@ export const AppProvider = ({ children }) => {
   const addProfile = async (input) => {
     const created = await createProfile(input);
     setProfiles((ps) => [...ps, created]);
-    if (!activeProfileId) switchProfile(created.id);
+    // Always make the newly created profile the active one.
+    switchProfile(created.id);
     return created;
   };
 
@@ -199,10 +207,7 @@ export const AppProvider = ({ children }) => {
     await deleteProfile(profileId);
     setProfiles((ps) => ps.filter((p) => p.id !== profileId));
     if (activeProfileId === profileId) {
-      const nextActive = profiles.find((p) => p.id !== profileId)?.id || null;
-      setActiveProfileId(nextActive);
-      if (nextActive) localStorage.setItem(ACTIVE_PROFILE_KEY, nextActive);
-      else localStorage.removeItem(ACTIVE_PROFILE_KEY);
+      setActiveProfileId(profiles.find((p) => p.id !== profileId)?.id || null);
     }
   };
 
