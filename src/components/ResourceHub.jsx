@@ -143,22 +143,27 @@ export default function ResourceHub() {
 
   return (
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      {/* Search */}
-      <div style={{ position: 'relative' }}>
-        <Search size={15} style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
-        <input
-          type="text"
-          className="input"
-          placeholder="Search resources..."
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          style={{ paddingLeft: '2.5rem', paddingRight: query ? '2.5rem' : '0.875rem' }}
-        />
-        {query && (
-          <button onClick={() => setQuery('')} style={{ position: 'absolute', right: '0.875rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
-            <X size={14} />
-          </button>
-        )}
+      {/* Search and Add */}
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <Search size={15} style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)', pointerEvents: 'none' }} />
+          <input
+            type="text"
+            className="input"
+            placeholder="Search resources..."
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            style={{ paddingLeft: '2.5rem', paddingRight: query ? '2.5rem' : '0.875rem' }}
+          />
+          {query && (
+            <button onClick={() => setQuery('')} style={{ position: 'absolute', right: '0.875rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <button onClick={() => setEditing('new')} className="btn btn-fire" style={{ padding: '0.6rem 0.8rem', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+          <Plus size={16} /> <span style={{ fontWeight: 600 }}>Add</span>
+        </button>
       </div>
 
       {/* Type filter chips */}
@@ -237,30 +242,7 @@ export default function ResourceHub() {
         </div>
       )}
 
-      {/* FAB */}
-      <button
-        onClick={() => setEditing('new')}
-        style={{
-          position: 'fixed',
-          bottom: 'calc(var(--nav-h) + 1rem)',
-          right: 'max(1rem, calc(50vw - 215px + 1rem))',
-          width: 52, height: 52,
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, var(--fire) 0%, var(--fire-light) 100%)',
-          border: 'none',
-          color: 'white',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer',
-          boxShadow: '0 4px 20px var(--fire-glow)',
-          zIndex: 300,
-          transition: 'transform 0.2s, box-shadow 0.2s',
-        }}
-        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
-        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-        title="Add resource"
-      >
-        <Plus size={22} strokeWidth={2.5} />
-      </button>
+      {/* FAB removed: moved to top */}
 
       {editing !== null && (
         <ResourceModal
