@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Trash2, Clock, Flame, Dumbbell, Calendar } from 'lucide-react';
+import { X, Trash2, Clock, Flame, Dumbbell, Calendar, Scale } from 'lucide-react';
 import { formatSessionDateTime } from '../lib/sessionTime';
 
 const CAT_MAP = {
@@ -109,6 +109,7 @@ export default function SessionDetailModal({ session, onClose, onDelete, syncing
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem 1.25rem' }}>
             {session.durationMinutes ? <Stat icon={<Clock size={13} />}>{session.durationMinutes} min</Stat> : null}
             {session.intensity ? <Stat icon={<Flame size={13} />}>{session.intensity} intensity</Stat> : null}
+            {session.bodyWeightKg != null ? <Stat icon={<Scale size={13} />}>{session.bodyWeightKg} kg body weight</Stat> : null}
             <Stat icon={<Dumbbell size={13} />}>
               {exercises.length} exercise{exercises.length !== 1 ? 's' : ''}
               {totalSets ? ` · ${totalSets} sets` : ''}

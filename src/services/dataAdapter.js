@@ -1,5 +1,5 @@
 import {
-  collection, doc, addDoc, deleteDoc, getDocs, getDoc, updateDoc, writeBatch,
+  collection, doc, addDoc, deleteDoc, getDocs, getDoc, setDoc, updateDoc, writeBatch,
   query, where, orderBy, onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
 import { auth } from '../lib/firebaseAuth';
@@ -30,6 +30,7 @@ const sessionDoc   = (profileId, id)    => doc(db, 'profiles', profileId, 'sessi
 const resourceDoc  = (profileId, id)    => doc(db, 'profiles', profileId, 'resources', id);
 const groupsCol    = ()                 => collection(db, 'groups');
 const groupDoc     = (groupId)          => doc(db, 'groups', groupId);
+const detailsDoc   = (profileId)        => doc(db, 'profiles', profileId, 'meta', 'profile');
 
 function normalizeEmails(emails) {
   return [...new Set((emails || [])
@@ -182,6 +183,23 @@ async function recomputeGroupAccess(groupId) {
   await batch.commit();
 }
 
+// ---- Profile details ------------------------------------------------------
+// Optional "about you" info, kept in a subdocument so the profile owner (and
+// the admin) can edit it without write access to the profile doc itself.
+
+export async function getProfileDetails(profileId) {
+  const snap = await getDoc(detailsDoc(profileId));
+  return snap.exists() ? snap.data() : {};
+}
+
+export async function saveProfileDetails(profileId, details) {
+  const clean = Object.fromEntries(
+    Object.entries(details || {}).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]),
+  );
+  await setDoc(detailsDoc(profileId), { ...clean, updatedAt: serverTimestamp() }, { merge: true });
+  return clean;
+}
+
 // ---- Sessions & resources -------------------------------------------------
 
 export async function addSession(profileId, session) {
@@ -253,6 +271,7 @@ function docToSession(d) {
     dayOfWeek: data.dayOfWeek,
     rawHeader: data.rawHeader,
     photoUrl: data.photoUrl || null,
+    bodyWeightKg: data.bodyWeightKg ?? null,
   };
 }
 
@@ -280,6 +299,7 @@ function sessionToDoc(s) {
     dayOfWeek: s.dayOfWeek,
     rawHeader: s.rawHeader,
     photoUrl: s.photoUrl || null,
+    bodyWeightKg: s.bodyWeightKg ?? null,
   });
 }
 

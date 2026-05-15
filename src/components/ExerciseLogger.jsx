@@ -255,7 +255,7 @@ function PhotoField({ photoUrl, setPhotoUrl }) {
 }
 
 // Step 3 — finish
-function FinishStep({ duration, setDuration, notes, setNotes, photoUrl, setPhotoUrl, workoutType, syncing, canSubmit }) {
+function FinishStep({ duration, setDuration, notes, setNotes, bodyWeight, setBodyWeight, photoUrl, setPhotoUrl, workoutType, syncing, canSubmit }) {
   const t = TYPES.find(t => t.value === workoutType);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -279,6 +279,27 @@ function FinishStep({ duration, setDuration, notes, setNotes, photoUrl, setPhoto
             {duration}m
           </span>
         </div>
+      </div>
+
+      <div>
+        <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>
+          Body weight (optional)
+        </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <input
+            type="number" min="0" step="0.1"
+            inputMode="decimal"
+            className="input"
+            placeholder="e.g. 72.5"
+            value={bodyWeight}
+            onChange={e => setBodyWeight(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', fontWeight: 600 }}>kg</span>
+        </div>
+        <p style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '0.3rem' }}>
+          Logging this each session builds a weight trend over time.
+        </p>
       </div>
 
       <div>
@@ -324,6 +345,7 @@ export default function ExerciseLogger() {
   const [exercises, setExercises] = useState([emptyEx()]);
   const [duration, setDuration] = useState(45);
   const [notes, setNotes] = useState('');
+  const [bodyWeight, setBodyWeight] = useState('');
   const [photoUrl, setPhotoUrl] = useState(null);
   const canSubmit = exercises.some(ex => ex.name.trim());
 
@@ -379,10 +401,14 @@ export default function ExerciseLogger() {
         })),
       rawHeader: `${today} — ${typeInfo.name}`,
       photoUrl: photoUrl || null,
+      bodyWeightKg: bodyWeight !== '' && !Number.isNaN(parseFloat(bodyWeight))
+        ? parseFloat(bodyWeight)
+        : null,
     };
 
     await addExerciseLog(payload);
     setNotes('');
+    setBodyWeight('');
     setPhotoUrl(null);
     setExercises([emptyEx()]);
     setDuration(45);
@@ -452,6 +478,8 @@ export default function ExerciseLogger() {
             setDuration={setDuration}
             notes={notes}
             setNotes={setNotes}
+            bodyWeight={bodyWeight}
+            setBodyWeight={setBodyWeight}
             photoUrl={photoUrl}
             setPhotoUrl={setPhotoUrl}
             workoutType={workoutType}

@@ -3,7 +3,7 @@
 
 const COLUMNS = [
   'Date', 'Time', 'Weekday', 'Type', 'Title',
-  'Duration (min)', 'Intensity',
+  'Duration (min)', 'Intensity', 'Body Weight (kg)',
   'Exercise', 'Equipment', 'Set', 'Weight (kg)', 'Reps', 'Bodyweight',
   'Notes', 'Has Photo',
 ];
@@ -25,6 +25,7 @@ export function buildSessionsCsv(sessions) {
       s.title || '',
       s.durationMinutes ?? '',
       s.intensity || '',
+      s.bodyWeightKg ?? '',
     ];
     const tail = [s.notes || '', s.photoUrl ? 'Yes' : 'No'];
     const exercises = s.exercises || [];
