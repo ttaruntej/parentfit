@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import {
-  listProfiles, createProfile,
+  listProfiles, createProfile, setProfileAccess, ADMIN_EMAIL,
   addSession, deleteSession,
   addResource, deleteResource,
   subscribeSessions, subscribeResources,
@@ -162,6 +162,13 @@ export const AppProvider = ({ children }) => {
     return created;
   };
 
+  // Admin-only: change which emails may see a profile.
+  const updateProfileAccess = async (profileId, emails) => {
+    const allowedEmails = await setProfileAccess(profileId, emails);
+    setProfiles((ps) => ps.map((p) => (p.id === profileId ? { ...p, allowedEmails } : p)));
+    return allowedEmails;
+  };
+
   const forceManualSync = async () => {
     triggerSuccess('Live');
   };
@@ -170,14 +177,15 @@ export const AppProvider = ({ children }) => {
   const closePlayer = () => setMediaPlayer({ isOpen: false, url: '', title: '', type: 'video' });
 
   const activeProfile = profiles.find((p) => p.id === activeProfileId) || null;
+  const isAdmin = (user?.email || '').toLowerCase() === ADMIN_EMAIL;
 
   return (
     <AppContext.Provider value={{
       exerciseData, resourceData,
       loading, resourceLoading, syncing, error, successMsg,
       mediaPlayer, isSettingsOpen, setIsSettingsOpen,
-      profiles, activeProfile, activeProfileId,
-      switchProfile, addProfile,
+      profiles, activeProfile, activeProfileId, isAdmin,
+      switchProfile, addProfile, updateProfileAccess,
       addExerciseLog, deleteExerciseLog,
       addResourceLink, deleteResourceLink,
       ensureResourcesLoaded,

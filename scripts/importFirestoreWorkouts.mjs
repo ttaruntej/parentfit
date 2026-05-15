@@ -9,7 +9,6 @@ const ROOT = path.resolve(__dirname, '..');
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'parentfit-prod';
 const DATABASE_ID = '(default)';
 const DOC_ROOT = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents`;
-const OWNER_EMAIL_FALLBACK = 'taruntejthadana@gmail.com';
 
 function runFirebase(args) {
   const command = process.platform === 'win32' ? 'cmd' : 'npx';
@@ -19,14 +18,13 @@ function runFirebase(args) {
   return execFileSync(command, commandArgs, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
-function getFirebaseLogin() {
+// The Firestore REST API called with a project member's OAuth token bypasses
+// security rules, so this seed import works regardless of the allow-lists.
+function getAccessToken() {
   const parsed = JSON.parse(runFirebase(['login:list', '--json']));
   const login = parsed.result?.[0];
   if (!login?.tokens?.access_token) throw new Error('Firebase CLI is not logged in or no access token was returned.');
-  return {
-    email: login.user?.email || OWNER_EMAIL_FALLBACK,
-    accessToken: login.tokens.access_token,
-  };
+  return login.tokens.access_token;
 }
 
 async function requestJson(url, options = {}) {
@@ -49,35 +47,6 @@ function authed(accessToken, options = {}) {
       ...(options.headers || {}),
     },
   };
-}
-
-async function authApi(accessToken, pathName, body) {
-  return requestJson(`https://www.googleapis.com/identitytoolkit/v3/relyingparty/${pathName}`, authed(accessToken, {
-    method: 'POST',
-    body: JSON.stringify({ targetProjectId: PROJECT_ID, ...body }),
-  }));
-}
-
-async function getOrCreateOwner(accessToken, loginEmail) {
-  const ownerEmail = process.env.OWNER_EMAIL || loginEmail || OWNER_EMAIL_FALLBACK;
-  const downloaded = await authApi(accessToken, 'downloadAccount', { maxResults: 1000 });
-  const existing = downloaded.users?.find((user) => user.email?.toLowerCase() === ownerEmail.toLowerCase());
-  if (existing?.localId) {
-    return { uid: existing.localId, email: ownerEmail, created: false };
-  }
-
-  const ownerUid = process.env.OWNER_UID || ownerEmail.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  await authApi(accessToken, 'uploadAccount', {
-    users: [
-      {
-        localId: ownerUid,
-        email: ownerEmail,
-        emailVerified: true,
-        displayName: 'ParentFit Owner',
-      },
-    ],
-  });
-  return { uid: ownerUid, email: ownerEmail, created: true };
 }
 
 function toFirestoreValue(value) {
@@ -161,29 +130,14 @@ async function batchWrite(accessToken, writes) {
   }
 }
 
-async function upsertUserDoc(accessToken, owner, importedAt) {
-  await batchWrite(accessToken, [
-    {
-      update: {
-        name: docName(`users/${owner.uid}`),
-        fields: toFirestoreFields({
-          email: owner.email,
-          updatedAt: { __timestamp: importedAt },
-          dataVersion: 'workouts-2025-12-to-2026-03',
-        }),
-      },
-      updateMask: { fieldPaths: ['email', 'updatedAt', 'dataVersion'] },
-    },
-  ]);
-}
-
 function profileMatches(doc, profile) {
   const data = fromFirestoreFields(doc.fields || {});
   return data.slug === profile.slug || data.name === profile.name || doc.name.endsWith(`/profiles/${profile.slug}`);
 }
 
-async function resolveProfiles(accessToken, uid) {
-  const existingDocs = await listDocuments(accessToken, `users/${uid}/profiles`);
+// Profiles live in a shared top-level collection; the document id is the slug.
+async function resolveProfiles(accessToken) {
+  const existingDocs = await listDocuments(accessToken, 'profiles');
   const result = new Map();
 
   for (const profile of PROFILES) {
@@ -195,10 +149,10 @@ async function resolveProfiles(accessToken, uid) {
   return result;
 }
 
-async function deletePreviousSessions(accessToken, uid, profileMap) {
+async function deletePreviousSessions(accessToken, profileMap) {
   const deleteWrites = [];
   for (const profile of profileMap.values()) {
-    const sessions = await listDocuments(accessToken, `users/${uid}/profiles/${profile.id}/sessions`);
+    const sessions = await listDocuments(accessToken, `profiles/${profile.id}/sessions`);
     for (const session of sessions) {
       deleteWrites.push({ delete: session.name });
     }
@@ -207,7 +161,7 @@ async function deletePreviousSessions(accessToken, uid, profileMap) {
   return deleteWrites.length;
 }
 
-function sessionWrite(uid, profileId, session, importedAt) {
+function sessionWrite(profileId, session, importedAt) {
   const payload = {
     ...session,
     createdAt: { __timestamp: importedAt },
@@ -218,21 +172,22 @@ function sessionWrite(uid, profileId, session, importedAt) {
 
   return {
     update: {
-      name: docName(`users/${uid}/profiles/${profileId}/sessions/${session.id}`),
+      name: docName(`profiles/${profileId}/sessions/${session.id}`),
       fields: toFirestoreFields(payload),
     },
   };
 }
 
-function profileWrite(uid, profile, importedAt, sessionCount) {
+function profileWrite(profile, importedAt, sessionCount) {
   return {
     update: {
-      name: docName(`users/${uid}/profiles/${profile.id}`),
+      name: docName(`profiles/${profile.id}`),
       fields: toFirestoreFields({
         slug: profile.slug,
         name: profile.name,
         initials: profile.initials,
         color: profile.color,
+        allowedEmails: (profile.allowedEmails || []).map((e) => String(e).trim().toLowerCase()),
         createdAt: { __timestamp: importedAt },
         updatedAt: { __timestamp: importedAt },
         importedAt: { __timestamp: importedAt },
@@ -240,45 +195,44 @@ function profileWrite(uid, profile, importedAt, sessionCount) {
       }),
     },
     updateMask: {
-      fieldPaths: ['slug', 'name', 'initials', 'color', 'createdAt', 'updatedAt', 'importedAt', 'sessionCount'],
+      fieldPaths: ['slug', 'name', 'initials', 'color', 'allowedEmails', 'createdAt', 'updatedAt', 'importedAt', 'sessionCount'],
     },
   };
 }
 
 async function importWorkouts() {
   const dataset = buildWorkoutDataset(ROOT);
-  const login = getFirebaseLogin();
-  const owner = await getOrCreateOwner(login.accessToken, login.email);
+  const accessToken = getAccessToken();
   const importedAt = new Date().toISOString();
-  const profileMap = await resolveProfiles(login.accessToken, owner.uid);
+  const profileMap = await resolveProfiles(accessToken);
 
-  await upsertUserDoc(login.accessToken, owner, importedAt);
-  const deletedSessions = await deletePreviousSessions(login.accessToken, owner.uid, profileMap);
+  const deletedSessions = await deletePreviousSessions(accessToken, profileMap);
 
   const writes = [];
   for (const profile of profileMap.values()) {
     const sessions = dataset.sessionsByProfile[profile.slug] || [];
-    writes.push(profileWrite(owner.uid, profile, importedAt, sessions.length));
-    for (const session of sessions) writes.push(sessionWrite(owner.uid, profile.id, session, importedAt));
+    writes.push(profileWrite(profile, importedAt, sessions.length));
+    for (const session of sessions) writes.push(sessionWrite(profile.id, session, importedAt));
   }
 
-  await batchWrite(login.accessToken, writes);
+  await batchWrite(accessToken, writes);
 
   return {
-    owner,
     deletedSessions,
     writtenSessions: dataset.sessions.length,
     profileTotals: dataset.meta.profileTotals,
-    authUserCreated: owner.created,
+    profileAccess: Object.fromEntries(
+      [...profileMap.values()].map((p) => [p.slug, p.allowedEmails || []]),
+    ),
   };
 }
 
 importWorkouts()
   .then((result) => {
-    console.log(`owner: ${result.owner.email} (${result.owner.uid})${result.authUserCreated ? ' created' : ''}`);
     console.log(`deleted previous sessions: ${result.deletedSessions}`);
     console.log(`written sessions: ${result.writtenSessions}`);
     console.log(`profile totals: ${JSON.stringify(result.profileTotals)}`);
+    console.log(`profile access: ${JSON.stringify(result.profileAccess)}`);
   })
   .catch((error) => {
     console.error(error);

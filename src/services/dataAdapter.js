@@ -1,36 +1,70 @@
 import {
-  collection, doc, addDoc, deleteDoc, getDocs,
-  query, orderBy, onSnapshot, serverTimestamp,
+  collection, doc, addDoc, deleteDoc, getDocs, setDoc, updateDoc,
+  query, where, orderBy, onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
 import { auth } from '../lib/firebaseAuth';
 import { db } from '../lib/firebaseDb';
 
-const uid = () => {
-  const u = auth.currentUser?.uid;
-  if (!u) throw new Error('Not signed in');
-  return u;
+// The single account that may create profiles and manage who can see them.
+export const ADMIN_EMAIL = 'taruntejthadana@gmail.com';
+
+const myEmail = () => {
+  const email = auth.currentUser?.email;
+  if (!email) throw new Error('Not signed in');
+  return email.toLowerCase();
 };
 
-const profilesCol  = ()          => collection(db, 'users', uid(), 'profiles');
-const sessionsCol  = (profileId) => collection(db, 'users', uid(), 'profiles', profileId, 'sessions');
-const resourcesCol = (profileId) => collection(db, 'users', uid(), 'profiles', profileId, 'resources');
+export function isAdmin() {
+  try {
+    return myEmail() === ADMIN_EMAIL;
+  } catch {
+    return false;
+  }
+}
 
-const sessionDoc  = (profileId, id) => doc(db, 'users', uid(), 'profiles', profileId, 'sessions',  id);
-const resourceDoc = (profileId, id) => doc(db, 'users', uid(), 'profiles', profileId, 'resources', id);
+// Profiles now live in a shared top-level collection. Access is gated per
+// profile by the allowedEmails field (see firestore.rules), not by the
+// signed-in account's uid.
+const profilesCol  = ()                => collection(db, 'profiles');
+const profileDoc   = (profileId)        => doc(db, 'profiles', profileId);
+const sessionsCol  = (profileId)        => collection(db, 'profiles', profileId, 'sessions');
+const resourcesCol = (profileId)        => collection(db, 'profiles', profileId, 'resources');
+const sessionDoc   = (profileId, id)    => doc(db, 'profiles', profileId, 'sessions',  id);
+const resourceDoc  = (profileId, id)    => doc(db, 'profiles', profileId, 'resources', id);
 
 export async function listProfiles() {
-  const snap = await getDocs(profilesCol());
+  // The admin sees every profile. Everyone else may only query the profiles
+  // their email is allow-listed on — a broad read would be rejected by rules.
+  const snap = isAdmin()
+    ? await getDocs(profilesCol())
+    : await getDocs(query(profilesCol(), where('allowedEmails', 'array-contains', myEmail())));
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() }))
     .sort((a, b) => String(a['name'] || '').localeCompare(String(b['name'] || '')));
 }
 
-export async function createProfile({ slug, name, initials, color }) {
-  const ref = await addDoc(profilesCol(), {
+export async function createProfile({ slug, name, initials, color, allowedEmails = [] }) {
+  // Use the slug as the document id so the app and the import script agree.
+  const profile = {
     slug, name, initials, color,
+    allowedEmails: normalizeEmails(allowedEmails),
     createdAt: serverTimestamp(),
-  });
-  return { id: ref.id, slug, name, initials, color };
+  };
+  await setDoc(profileDoc(slug), profile);
+  return { id: slug, slug, name, initials, color, allowedEmails: profile.allowedEmails };
+}
+
+// Admin-only: replace the set of emails allowed to see a profile.
+export async function setProfileAccess(profileId, emails) {
+  const allowedEmails = normalizeEmails(emails);
+  await updateDoc(profileDoc(profileId), { allowedEmails });
+  return allowedEmails;
+}
+
+function normalizeEmails(emails) {
+  return [...new Set((emails || [])
+    .map((e) => String(e).trim().toLowerCase())
+    .filter(Boolean))];
 }
 
 export async function addSession(profileId, session) {

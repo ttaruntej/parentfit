@@ -3,14 +3,45 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Everything under users/{uid} is owned by that auth user.
-    // The recursive wildcard {document=**} matches profiles, sessions,
-    // resources, and any future subcollection.
-    match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    // ---- Identity helpers -------------------------------------------------
+
+    // Only verified emails count. Email-link sign-in produces a verified email.
+    function isVerified() {
+      return request.auth != null && request.auth.token.email_verified == true;
     }
 
-    // Belt-and-braces: deny anything else at the root.
+    function userEmail() {
+      return request.auth.token.email;
+    }
+
+    // The admin can read every profile and is the only account allowed to
+    // create profiles or change who may see them.
+    function isAdmin() {
+      return isVerified() && userEmail() == 'taruntejthadana@gmail.com';
+    }
+
+    // True when the signed-in user's email is on this profile's allow-list.
+    function isAllowed(profileId) {
+      return isVerified()
+        && userEmail() in get(/databases/$(database)/documents/profiles/$(profileId)).data.allowedEmails;
+    }
+
+    // ---- Per-profile data -------------------------------------------------
+    match /profiles/{profileId} {
+      // Profile metadata, including the allowedEmails list itself.
+      // Anyone on the list may read it; only the admin may create or change it.
+      allow read:                   if isAdmin() || isAllowed(profileId);
+      allow create, update, delete:  if isAdmin();
+
+      // Sessions, resources, and any future subcollection: an allowed member
+      // may read and write their own profile's data; the admin may do anything.
+      match /{document=**} {
+        allow read, write: if isAdmin() || isAllowed(profileId);
+      }
+    }
+
+    // ---- Default deny -----------------------------------------------------
+    // Everything else, including the legacy users/{uid} tree, is closed.
     match /{document=**} {
       allow read, write: if false;
     }

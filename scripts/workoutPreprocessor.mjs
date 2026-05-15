@@ -7,12 +7,14 @@ export const PROFILES = [
     name: 'Thadana Apparao',
     initials: 'TA',
     color: '#FF6B35',
+    allowedEmails: ['thadanapparao@gmail.com'],
   },
   {
     slug: 'addipalli-vijaya-kumari',
     name: 'Addipalli Vijaya Kumari',
     initials: 'AV',
     color: '#00C896',
+    allowedEmails: ['addipallivijayakumari@gmail.com'],
   },
 ];
 
