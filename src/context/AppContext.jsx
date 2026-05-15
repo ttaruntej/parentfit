@@ -1,196 +1,184 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useAuth } from './AuthContext';
 import {
-  getExerciseLogs,
-  saveExerciseLogs,
-  getResourceLinks,
-  saveResourceLinks,
-  getConfig,
-  saveConfig as persistConfig,
-  getActiveUserId,
-  setActiveUserId,
-  USERS,
-} from '../services/githubBackend';
+  listProfiles, createProfile,
+  addSession, deleteSession,
+  addResource, deleteResource,
+  subscribeSessions, subscribeResources,
+} from '../services/dataAdapter';
 
 const AppContext = createContext(null);
+const ACTIVE_PROFILE_KEY = 'parentfit_active_profile';
 
 export const AppProvider = ({ children }) => {
+  const { user } = useAuth();
+
+  const [profiles, setProfiles] = useState([]);
+  const [activeProfileId, setActiveProfileId] = useState(
+    () => localStorage.getItem(ACTIVE_PROFILE_KEY) || null
+  );
+
   const [exerciseData, setExerciseData] = useState({ logs: [] });
-  const [resourceData, setResourceData]  = useState({ resources: [] });
-  const [loading, setLoading]     = useState(true);
-  const [syncing, setSyncing]     = useState(false);
-  const [error, setError]         = useState(null);
+  const [resourceData, setResourceData] = useState({ resources: [] });
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
   const [mediaPlayer, setMediaPlayer] = useState({ isOpen: false, url: '', title: '', type: 'video' });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  const [ghConfig, setGhConfig] = useState(() => getConfig());
-  const [activeUserId, _setActiveUserId] = useState(() => getActiveUserId());
+  const triggerSuccess = (msg) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(null), 4000); };
+  const triggerError   = (msg) => { setError(msg);      setTimeout(() => setError(null), 6000); };
 
-  const triggerSuccess = (msg) => {
-    setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(null), 4000);
-  };
-  const triggerError = (msg) => {
-    setError(msg);
-    setTimeout(() => setError(null), 6000);
-  };
-
-  // ── Load data for the active user ──────────────────────────────────────────
-  const loadData = useCallback(async (userId) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const uid = userId || activeUserId;
-      const [exercises, resources] = await Promise.all([
-        getExerciseLogs(uid),
-        getResourceLinks(uid),
-      ]);
-      setExerciseData(exercises || { logs: [] });
-      setResourceData(resources || { resources: [] });
-    } catch (err) {
-      console.error('Failed loading data:', err);
-      triggerError('Could not sync with cloud storage. Serving cached data.');
-    } finally {
-      setLoading(false);
-    }
-  }, [activeUserId]);
-
-  useEffect(() => { loadData(activeUserId); }, [activeUserId]);
-
-  // ── Magic Link: Auto-configure via URL params ──────────────────────────────
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const owner = params.get('owner');
-    const repo  = params.get('repo');
-    const branch = params.get('branch');
-
-    if (owner || repo) {
-      persistConfig({
-        owner:  owner  || ghConfig.owner,
-        repo:   repo   || ghConfig.repo,
-        branch: branch || ghConfig.branch || 'main',
-      });
-      // Refresh local state
-      setGhConfig(getConfig());
-      triggerSuccess('Magic Link detected! Configuration synced ✓');
-      // Clean URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      // Reload data
-      setTimeout(() => loadData(activeUserId), 500);
+    if (!user) {
+      setProfiles([]);
+      setExerciseData({ logs: [] });
+      setResourceData({ resources: [] });
+      setLoading(false);
+      return;
     }
-  }, [ghConfig, activeUserId, loadData]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const ps = await listProfiles();
+        if (cancelled) return;
+        setProfiles(ps);
+        if (!activeProfileId && ps[0]) {
+          setActiveProfileId(ps[0].id);
+          localStorage.setItem(ACTIVE_PROFILE_KEY, ps[0].id);
+        }
+        if (ps.length === 0) setLoading(false);
+      } catch (e) {
+        console.error(e);
+        triggerError('Could not load profiles.');
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
-  // ── Switch user ────────────────────────────────────────────────────────────
-  const switchUser = (userId) => {
-    setActiveUserId(userId);
-    _setActiveUserId(userId);
-    // loadData will fire via useEffect on activeUserId change
-  };
+  useEffect(() => {
+    if (!user || !activeProfileId) return;
+    setLoading(true);
 
-  // ── Exercise log mutators ──────────────────────────────────────────────────
+    let sessionsReady = false;
+    let resourcesReady = false;
+    const finish = () => { if (sessionsReady && resourcesReady) setLoading(false); };
+
+    const unsubA = subscribeSessions(activeProfileId, (logs) => {
+      setExerciseData({ logs });
+      sessionsReady = true; finish();
+    });
+    const unsubB = subscribeResources(activeProfileId, (resources) => {
+      setResourceData({ resources });
+      resourcesReady = true; finish();
+    });
+
+    return () => { unsubA(); unsubB(); };
+  }, [user, activeProfileId]);
+
   const addExerciseLog = async (newLog) => {
+    if (!activeProfileId) return;
     setSyncing(true);
-    const updated = { ...exerciseData, logs: [newLog, ...(exerciseData.logs || [])] };
-    setExerciseData(updated);
     try {
-      const res = await saveExerciseLogs(updated, activeUserId);
-      triggerSuccess(res.simulated
-        ? `Session logged locally! Add access token in Settings to sync.`
-        : `Session synced to cloud ✓`
-      );
-    } catch (err) {
-      triggerError('Failed to sync session to cloud. Cached locally.');
+      await addSession(activeProfileId, newLog);
+      triggerSuccess('Session synced');
+    } catch (e) {
+      console.error(e);
+      triggerError('Failed to save session.');
     } finally {
       setSyncing(false);
     }
   };
 
-  const deleteExerciseLog = async (logId) => {
-    if (!window.confirm('Are you sure you want to delete this session? This cannot be undone.')) return;
+  const deleteExerciseLog = async (id) => {
+    if (!window.confirm('Delete this session?')) return;
     setSyncing(true);
-    const updated = { ...exerciseData, logs: (exerciseData.logs || []).filter(l => l.id !== logId) };
-    setExerciseData(updated);
     try {
-      await saveExerciseLogs(updated, activeUserId);
+      await deleteSession(activeProfileId, id);
       triggerSuccess('Session removed.');
-    } catch (err) {
-      console.error('Delete failed:', err);
-      triggerError(`Failed to delete remotely: ${err.message || 'Check your token'}`);
-      // Rollback local state on error
-      loadData(activeUserId);
+    } catch (e) {
+      console.error(e);
+      triggerError('Failed to delete session.');
     } finally {
       setSyncing(false);
     }
   };
 
-  // ── Resource link mutators ─────────────────────────────────────────────────
   const addResourceLink = async (newResource) => {
+    if (!activeProfileId) return;
     setSyncing(true);
-    const updated = { ...resourceData, resources: [newResource, ...(resourceData.resources || [])] };
-    setResourceData(updated);
     try {
-      const res = await saveResourceLinks(updated, activeUserId);
-      triggerSuccess(res.simulated ? 'Resource saved locally.' : 'Resource synced to cloud ✓');
-    } catch (err) {
-      triggerError('Failed to save resource remotely.');
+      await addResource(activeProfileId, newResource);
+      triggerSuccess('Resource saved');
+    } catch (e) {
+      console.error(e);
+      triggerError('Failed to save resource.');
     } finally {
       setSyncing(false);
     }
   };
 
-  const deleteResourceLink = async (resId) => {
+  const deleteResourceLink = async (id) => {
     if (!window.confirm('Delete this resource?')) return;
     setSyncing(true);
-    const updated = { ...resourceData, resources: (resourceData.resources || []).filter(r => r.id !== resId) };
-    setResourceData(updated);
     try {
-      await saveResourceLinks(updated, activeUserId);
+      await deleteResource(activeProfileId, id);
       triggerSuccess('Resource removed.');
-    } catch (err) {
-      triggerError('Failed to remove resource.');
-      loadData(activeUserId);
+    } catch (e) {
+      console.error(e);
+      triggerError('Failed to delete resource.');
     } finally {
       setSyncing(false);
     }
   };
 
-  // ── Config & sync ──────────────────────────────────────────────────────────
+  const switchProfile = (profileId) => {
+    setActiveProfileId(profileId);
+    localStorage.setItem(ACTIVE_PROFILE_KEY, profileId);
+  };
+
+  const addProfile = async (input) => {
+    const created = await createProfile(input);
+    setProfiles((ps) => [...ps, created]);
+    if (!activeProfileId) switchProfile(created.id);
+    return created;
+  };
+
   const forceManualSync = async () => {
-    await loadData(activeUserId);
-    triggerSuccess('Synced from cloud storage ✓');
+    triggerSuccess('Live');
   };
 
-  const updateConfig = (newCfg) => {
-    persistConfig(newCfg);
-    setGhConfig(newCfg);
-    setIsSettingsOpen(false);
-    triggerSuccess('Settings saved. Reloading data...');
-    setTimeout(() => loadData(activeUserId), 300);
-  };
-
-  // ── Media player ──────────────────────────────────────────────────────────
   const openPlayer  = (url, title, type = 'video') => setMediaPlayer({ isOpen: true, url, title, type });
   const closePlayer = () => setMediaPlayer({ isOpen: false, url: '', title: '', type: 'video' });
 
-  const value = {
-    exerciseData, resourceData,
-    loading, syncing, error, successMsg,
-    mediaPlayer, isSettingsOpen, setIsSettingsOpen,
-    ghConfig, updateConfig,
-    activeUserId, switchUser,
-    users: USERS,
-    addExerciseLog, deleteExerciseLog,
-    addResourceLink, deleteResourceLink,
-    forceManualSync,
-    openPlayer, closePlayer,
-  };
+  const activeProfile = profiles.find((p) => p.id === activeProfileId) || null;
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={{
+      exerciseData, resourceData,
+      loading, syncing, error, successMsg,
+      mediaPlayer, isSettingsOpen, setIsSettingsOpen,
+      profiles, activeProfile, activeProfileId,
+      switchProfile, addProfile,
+      users: profiles,
+      activeUserId: activeProfileId,
+      switchUser: switchProfile,
+      ghConfig: { token: 'firebase', owner: '', repo: '', branch: 'main' },
+      addExerciseLog, deleteExerciseLog,
+      addResourceLink, deleteResourceLink,
+      forceManualSync,
+      openPlayer, closePlayer,
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
 };
 
 export const useApp = () => {
   const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used inside AppProvider');
+  if (!ctx) throw new Error('useApp must be inside <AppProvider>');
   return ctx;
 };

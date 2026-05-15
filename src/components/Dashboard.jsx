@@ -53,9 +53,12 @@ function streak(logs) {
 }
 
 export default function Dashboard({ onGoLog }) {
-  const { exerciseData, deleteExerciseLog, syncing, ghConfig, setIsSettingsOpen } = useApp();
-  const logs = useMemo(() => (exerciseData?.logs || []).slice().reverse(), [exerciseData]);
-  const isDemo = !ghConfig.token || ghConfig.token.length < 5;
+  const { exerciseData, deleteExerciseLog, syncing } = useApp();
+  const logs = useMemo(() => {
+    const all = exerciseData?.logs || [];
+    return [...all].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  }, [exerciseData]);
+  const isDemo = false;
 
   const totalWorkouts = logs.length;
   const totalMins = logs.reduce((a, l) => a + (Number(l.durationMinutes) || 0), 0);

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from './context/AppContext';
+import { useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
 import Dashboard from './components/Dashboard';
@@ -8,7 +9,9 @@ import HistoryView from './components/HistoryView';
 import ResourceHub from './components/ResourceHub';
 import MediaPlayerModal from './components/MediaPlayerModal';
 import SettingsModal from './components/SettingsModal';
-import { CheckCircle, AlertTriangle, Dumbbell, Settings, Cloud, Database } from 'lucide-react';
+import SignIn from './components/SignIn';
+import ProfileSetup from './components/ProfileSetup';
+import { CheckCircle, AlertTriangle, Dumbbell } from 'lucide-react';
 
 
 function KnowledgeCard({ title, desc, tag, img }) {
@@ -25,10 +28,6 @@ function KnowledgeCard({ title, desc, tag, img }) {
 }
 
 function MorePage() {
-  const { ghConfig, syncing, forceManualSync, setIsSettingsOpen } = useApp();
-  const onOpenModal = () => setIsSettingsOpen(true);
-  const isDemo = ghConfig.owner === 'parent-fitness' && ghConfig.repo === 'exercise-logs';
-
   const knowledgeItems = [
     {
       title: "Micro-Workouts",
@@ -61,7 +60,7 @@ function MorePage() {
       <div>
         <div className="section-header">
           <div className="section-title">Knowledge Hub</div>
-          <div className="glass-pill">AI Curated</div>
+          <div className="glass-pill">Curated</div>
         </div>
         <div className="knowledge-grid">
           {knowledgeItems.map((item, i) => (
@@ -70,53 +69,8 @@ function MorePage() {
         </div>
       </div>
 
-      <div className="section-divider"></div>
-
-      <div>
-        <div className="section-title" style={{ marginBottom: '0.75rem' }}>System & Preferences</div>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-          <div className="card" style={{ padding: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-              <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'rgba(0,200,150,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Cloud size={18} color="var(--teal)" />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Cloud Synchronization</div>
-                <div className="text-xs text-dim">Secure remote storage</div>
-              </div>
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '0.15rem 0.5rem', borderRadius: '999px',
-                background: isDemo ? 'rgba(245,158,11,0.1)' : 'rgba(0,200,150,0.1)',
-                color: isDemo ? '#F59E0B' : 'var(--teal)',
-                border: `1px solid ${isDemo ? 'rgba(245,158,11,0.2)' : 'rgba(0,200,150,0.2)'}`,
-              }}>
-                {isDemo ? 'Demo' : 'Live'}
-              </span>
-            </div>
-            <button className="btn btn-ghost" style={{ width: '100%', fontSize: '0.8rem', padding: '0.6rem' }} onClick={onOpenModal}>
-              <Settings size={14} /> Configure Storage
-            </button>
-          </div>
-
-          <div className="card" style={{ padding: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'rgba(255,107,53,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Database size={18} color="var(--fire)" />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Manual Sync</div>
-                <div className="text-xs text-dim">Force data refresh</div>
-              </div>
-              <button className="btn btn-ghost" style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }} onClick={forceManualSync} disabled={syncing}>
-                {syncing ? '...' : 'Sync'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: '1rem', opacity: 0.6 }}>
-        ParentFit v1.2 · Premium Experience
+      <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: '2rem', opacity: 0.6 }}>
+        ParentFit · Firebase Sync
       </div>
     </div>
   );
@@ -131,13 +85,31 @@ const PAGE_TITLE = {
   settings: 'More',
 };
 
+const FullScreenSpinner = () => (
+  <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', background: '#0a0808' }}>
+    <div style={{ color: 'var(--fire)', animation: 'spin 2s linear infinite' }}>
+      <Dumbbell size={48} />
+    </div>
+    <div style={{ fontFamily: 'var(--font-head)', fontSize: '1.1rem', color: 'var(--text-primary)' }}>Loading...</div>
+  </div>
+);
+
 export default function App() {
-  const { loading, error, successMsg, isSettingsOpen, setIsSettingsOpen } = useApp();
+  const { user, loadingSession } = useAuth();
+  const { loading, error, successMsg, profiles, activeProfileId } = useApp();
   const [tab, setTab] = useState('home');
+
+  useEffect(() => {
+    document.title = `${PAGE_TITLE[tab]} · ParentFit`;
+  }, [tab]);
+
+  if (loadingSession) return <FullScreenSpinner />;
+  if (!user) return <SignIn />;
+  if (!loading && profiles.length === 0) return <ProfileSetup />;
+  if (!activeProfileId) return <FullScreenSpinner />;
 
   return (
     <>
-      {/* Desktop background */}
       <div style={{
         position: 'fixed', inset: 0, zIndex: -1,
         background: '#0a0808',
@@ -175,17 +147,18 @@ export default function App() {
         <BottomNav active={tab} onChange={setTab} />
       </div>
 
-      {/* Toasts */}
-      {successMsg && (
-        <div className="toast toast-success">
-          <CheckCircle size={16} /> {successMsg}
-        </div>
-      )}
-      {error && (
-        <div className="toast toast-error">
-          <AlertTriangle size={16} /> {error}
-        </div>
-      )}
+      <div role="status" aria-live="polite">
+        {successMsg && (
+          <div className="toast toast-success">
+            <CheckCircle size={16} /> {successMsg}
+          </div>
+        )}
+        {error && (
+          <div className="toast toast-error" role="alert">
+            <AlertTriangle size={16} /> {error}
+          </div>
+        )}
+      </div>
 
       <MediaPlayerModal />
       <SettingsModal />
