@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Trash2, Clock, Flame, Dumbbell, Calendar } from 'lucide-react';
 import { formatSessionDateTime } from '../lib/sessionTime';
 
@@ -54,7 +55,10 @@ export default function SessionDetailModal({ session, onClose, onDelete, syncing
     onClose();
   };
 
-  return (
+  // Rendered through a portal to document.body so position:fixed is relative
+  // to the viewport — the History view sits inside a CSS-animated (transformed)
+  // container, which would otherwise trap a fixed-position child.
+  return createPortal(
     <div
       onClick={(e) => e.target === e.currentTarget && onClose()}
       style={{
@@ -183,6 +187,7 @@ export default function SessionDetailModal({ session, onClose, onDelete, syncing
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

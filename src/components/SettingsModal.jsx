@@ -4,15 +4,16 @@ import { useAuth } from '../context/AuthContext';
 import { LogOut, X, User, ShieldCheck, Check, Users, Plus, Trash2, Pencil } from 'lucide-react';
 import { listGroups, saveGroup, deleteGroup } from '../services/dataAdapter';
 
-function ProfileAccessRow({ profile, onSave }) {
+function ProfileAccessRow({ profile, onSave, onDelete }) {
   const [emails, setEmails] = useState((profile.baseEmails || profile.allowedEmails || []).join(', '));
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [err, setErr] = useState(false);
+  const [err, setErr] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const save = async () => {
     setBusy(true);
-    setErr(false);
+    setErr(null);
     setSaved(false);
     try {
       const list = emails.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
@@ -22,16 +23,40 @@ function ProfileAccessRow({ profile, onSave }) {
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {
       console.error(e);
-      setErr(true);
+      setErr('Could not update access. Try again.');
     } finally {
       setBusy(false);
     }
   };
 
+  const remove = async () => {
+    if (!window.confirm(`Delete "${profile.name}" and ALL of their workout data? This cannot be undone.`)) return;
+    setDeleting(true);
+    setErr(null);
+    try {
+      await onDelete(profile.id);
+    } catch (e) {
+      console.error(e);
+      setErr('Could not delete the profile. Try again.');
+      setDeleting(false);
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-        {profile.name}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+          {profile.name}
+        </span>
+        <button
+          type="button"
+          onClick={remove}
+          disabled={deleting}
+          className="btn btn-danger btn-icon"
+          title="Delete profile and all its data"
+        >
+          <Trash2 size={13} />
+        </button>
       </div>
       <div style={{ display: 'flex', gap: '0.4rem' }}>
         <input
@@ -42,12 +67,12 @@ function ProfileAccessRow({ profile, onSave }) {
           onChange={(e) => setEmails(e.target.value)}
           style={{ fontSize: '0.8rem' }}
         />
-        <button type="button" onClick={save} disabled={busy} className="btn btn-fire" style={{ padding: '0 0.8rem', whiteSpace: 'nowrap' }}>
+        <button type="button" onClick={save} disabled={busy || deleting} className="btn btn-fire" style={{ padding: '0 0.8rem', whiteSpace: 'nowrap' }}>
           {saved ? <Check size={15} /> : (busy ? '...' : 'Save')}
         </button>
       </div>
       {err && (
-        <div style={{ fontSize: '0.72rem', color: '#F87171' }}>Could not update access. Try again.</div>
+        <div style={{ fontSize: '0.72rem', color: '#F87171' }}>{err}</div>
       )}
     </div>
   );
@@ -197,7 +222,7 @@ function GroupsManager({ profiles }) {
 }
 
 export default function SettingsModal() {
-  const { isSettingsOpen, setIsSettingsOpen, profiles, isAdmin, updateProfileAccess } = useApp();
+  const { isSettingsOpen, setIsSettingsOpen, profiles, isAdmin, updateProfileAccess, removeProfile } = useApp();
   const { user, signOut } = useAuth();
   if (!isSettingsOpen) return null;
 
@@ -265,10 +290,11 @@ export default function SettingsModal() {
                 Manage access
               </div>
               {profiles.map((p) => (
-                <ProfileAccessRow key={p.id} profile={p} onSave={updateProfileAccess} />
+                <ProfileAccessRow key={p.id} profile={p} onSave={updateProfileAccess} onDelete={removeProfile} />
               ))}
               <p style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
                 Each profile is visible to the emails listed above, plus you as the admin.
+                Deleting a profile removes all of its workout data permanently.
               </p>
             </div>
 

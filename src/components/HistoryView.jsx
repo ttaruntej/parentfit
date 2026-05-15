@@ -26,65 +26,114 @@ const SORT_OPTIONS = [
   { value: 'shortest', label: 'Shortest session' },
 ];
 
-function formatDateKey(value) {
-  const d = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-function buildHeatmap(logs) {
-  const today = new Date(); today.setHours(0,0,0,0);
+function pad(n) { return String(n).padStart(2, '0'); }
+
+// Build month-by-month calendars from the earliest session up to today.
+function buildMonths(logs) {
   const dayMap = {};
-  logs.forEach(l => {
+  let earliest = null;
+  logs.forEach((l) => {
     const k = getSessionDateKey(l);
-    if (k) dayMap[k] = (dayMap[k] || 0) + 1;
+    if (!k) return;
+    dayMap[k] = (dayMap[k] || 0) + 1;
+    if (!earliest || k < earliest) earliest = k;
   });
-  const cells = [];
-  const cur = new Date(today);
-  cur.setDate(today.getDate() - 83);
-  while (cur <= today) {
-    const k = formatDateKey(cur);
-    cells.push({ date: k, count: dayMap[k] || 0 });
-    cur.setDate(cur.getDate() + 1);
+
+  const today = new Date();
+  let startY = today.getFullYear();
+  let startM = today.getMonth();
+  if (earliest) {
+    const [ey, em] = earliest.split('-').map(Number);
+    startY = ey;
+    startM = em - 1;
   }
-  return cells;
+
+  const months = [];
+  let y = today.getFullYear();
+  let m = today.getMonth();
+  while (months.length < 12) {
+    const first = new Date(y, m, 1);
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < first.getDay(); i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = `${y}-${pad(m + 1)}-${pad(d)}`;
+      cells.push({ day: d, date, count: dayMap[date] || 0 });
+    }
+    months.push({
+      key: `${y}-${m}`,
+      label: first.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+      cells,
+    });
+    if (y === startY && m === startM) break;
+    m -= 1;
+    if (m < 0) { m = 11; y -= 1; }
+  }
+  return months;
 }
 
-function Heatmap({ logs }) {
-  const cells = useMemo(() => buildHeatmap(logs), [logs]);
-  const totalCols = Math.ceil(cells.length / 7);
+function DayCell({ cell, selected, onPick }) {
+  const has = cell.count > 0;
+  const lvl = cell.count === 0 ? '' : cell.count === 1 ? 'd1' : cell.count === 2 ? 'd2' : 'd3';
+  return (
+    <button
+      type="button"
+      disabled={!has}
+      onClick={() => onPick(selected ? null : cell.date)}
+      title={`${cell.date}: ${cell.count} session${cell.count !== 1 ? 's' : ''}`}
+      className={`heatmap-cell${lvl ? ' ' + lvl : ''}`}
+      style={{
+        aspectRatio: '1',
+        border: selected ? '2px solid var(--fire)' : '1px solid transparent',
+        borderRadius: 4,
+        cursor: has ? 'pointer' : 'default',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '0.62rem', fontWeight: 600, padding: 0,
+        color: has ? '#fff' : 'var(--text-tertiary)',
+        opacity: has ? 1 : 0.55,
+      }}
+    >
+      {cell.day}
+    </button>
+  );
+}
+
+function Heatmap({ logs, selectedDate, onPickDate }) {
+  const months = useMemo(() => buildMonths(logs), [logs]);
 
   return (
     <div className="card">
       <div className="section-header">
-        <span className="section-title">Activity Heatmap</span>
-        <span className="text-xs text-dim">Last 12 weeks</span>
+        <span className="section-title">Activity Calendar</span>
+        <span className="text-xs text-dim">Tap a day to filter</span>
       </div>
-      <div style={{ overflowX: 'auto', paddingBottom: '0.25rem' }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${totalCols}, 13px)`,
-          gridTemplateRows: 'repeat(7, 13px)',
-          gap: 3,
-          minWidth: 'max-content',
-        }}>
-          {cells.map((c, i) => {
-            const lvl = c.count === 0 ? '' : c.count === 1 ? 'd1' : c.count === 2 ? 'd2' : 'd3';
-            return (
-              <div
-                key={c.date}
-                className={`heatmap-cell${lvl ? ' ' + lvl : ''}`}
-                style={{ gridColumn: Math.floor(i / 7) + 1, gridRow: i % 7 + 1 }}
-                title={`${c.date}: ${c.count} session${c.count !== 1 ? 's' : ''}`}
-              />
-            );
-          })}
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+        {months.map((mo) => (
+          <div key={mo.key}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
+              {mo.label}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+              {WEEKDAYS.map((w, i) => (
+                <div key={`wd-${i}`} style={{ fontSize: '0.58rem', textAlign: 'center', color: 'var(--text-tertiary)', paddingBottom: 2 }}>
+                  {w}
+                </div>
+              ))}
+              {mo.cells.map((c, i) => (
+                c === null
+                  ? <div key={`b-${i}`} />
+                  : <DayCell key={c.date} cell={c} selected={selectedDate === c.date} onPick={onPickDate} />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.625rem', justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.75rem', justifyContent: 'flex-end' }}>
         <span className="text-xs text-dim">Less</span>
-        {['', 'd1', 'd2', 'd3'].map(d => (
-          <div key={d || 'none'} className={`heatmap-cell${d ? ' ' + d : ''}`} style={{ width: 11, height: 11 }} />
+        {['', 'd1', 'd2', 'd3'].map((d) => (
+          <div key={d || 'none'} className={`heatmap-cell${d ? ' ' + d : ''}`} style={{ width: 11, height: 11, borderRadius: 3 }} />
         ))}
         <span className="text-xs text-dim">More</span>
       </div>
@@ -159,6 +208,7 @@ export default function HistoryView() {
 
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState(null);
   const [sort, setSort] = useState('newest');
   const [showSort, setShowSort] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -174,6 +224,10 @@ export default function HistoryView() {
 
   const filtered = useMemo(() => {
     let result = filter === 'all' ? allLogs : allLogs.filter(l => l.workoutType === filter);
+
+    if (dateFilter) {
+      result = result.filter(l => getSessionDateKey(l) === dateFilter);
+    }
 
     if (query.trim()) {
       const q = query.toLowerCase();
@@ -191,7 +245,7 @@ export default function HistoryView() {
       if (sort === 'shortest') return (a.durationMinutes || 0) - (b.durationMinutes || 0);
       return 0;
     });
-  }, [allLogs, filter, query, sort]);
+  }, [allLogs, filter, dateFilter, query, sort]);
 
   // Group by time period
   const grouped = useMemo(() => {
@@ -213,8 +267,17 @@ export default function HistoryView() {
     return groups;
   }, [filtered]);
 
-  const clearSearch = useCallback(() => { setQuery(''); setFilter('all'); }, []);
+  const hasFilters = query || filter !== 'all' || dateFilter;
+  const clearFilters = useCallback(() => { setQuery(''); setFilter('all'); setDateFilter(null); }, []);
   const selected = useMemo(() => allLogs.find(l => l.id === selectedId) || null, [allLogs, selectedId]);
+
+  const dateFilterLabel = useMemo(() => {
+    if (!dateFilter) return '';
+    const d = new Date(`${dateFilter}T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? dateFilter
+      : d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  }, [dateFilter]);
 
   const exportCsv = useCallback(() => {
     if (!filtered.length) return;
@@ -226,7 +289,7 @@ export default function HistoryView() {
 
   return (
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <Heatmap logs={allLogs} />
+      <Heatmap logs={allLogs} selectedDate={dateFilter} onPickDate={setDateFilter} />
 
       {/* Search bar */}
       <div style={{ position: 'relative' }}>
@@ -247,7 +310,7 @@ export default function HistoryView() {
         )}
       </div>
 
-      {/* Filter chips + sort */}
+      {/* Filter chips + export + sort */}
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
         <div className="chip-rail" style={{ flex: 1 }}>
           {FILTERS.map(f => (
@@ -308,14 +371,15 @@ export default function HistoryView() {
       </div>
 
       {/* Active filter summary */}
-      {(query || filter !== 'all') && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {hasFilters && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
           <span className="text-xs text-dim">
             {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+            {dateFilter ? ` on ${dateFilterLabel}` : ''}
             {query ? ` for "${query}"` : ''}
             {filter !== 'all' ? ` · ${filter}` : ''}
           </span>
-          <button onClick={clearSearch} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fire)', fontSize: '0.75rem', fontWeight: 600 }}>
+          <button onClick={clearFilters} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fire)', fontSize: '0.75rem', fontWeight: 600, flexShrink: 0 }}>
             Clear filters
           </button>
         </div>
@@ -328,7 +392,7 @@ export default function HistoryView() {
           <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
             {query ? `No sessions found for "${query}"` : 'No sessions match this filter.'}
           </div>
-          <button className="btn btn-ghost" style={{ borderRadius: 'var(--radius-sm)' }} onClick={clearSearch}>
+          <button className="btn btn-ghost" style={{ borderRadius: 'var(--radius-sm)' }} onClick={clearFilters}>
             Clear filters
           </button>
         </div>

@@ -137,6 +137,35 @@ export async function deleteGroup(id) {
   await batch.commit();
 }
 
+// Admin-only: permanently delete a profile and everything under it
+// (sessions, resources). If the profile is in a group it is removed from it.
+export async function deleteProfile(profileId) {
+  const pSnap = await getDoc(profileDoc(profileId));
+  const groupId = pSnap.exists() ? (pSnap.data().groupId || null) : null;
+
+  const [sessions, resources] = await Promise.all([
+    getDocs(sessionsCol(profileId)),
+    getDocs(resourcesCol(profileId)),
+  ]);
+  const childDocs = [...sessions.docs, ...resources.docs];
+  for (let i = 0; i < childDocs.length; i += 400) {
+    const batch = writeBatch(db);
+    childDocs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+
+  await deleteDoc(profileDoc(profileId));
+
+  if (groupId) {
+    const gSnap = await getDoc(groupDoc(groupId));
+    if (gSnap.exists()) {
+      const remaining = (gSnap.data().profileIds || []).filter((id) => id !== profileId);
+      await updateDoc(groupDoc(groupId), { profileIds: remaining });
+      await recomputeGroupAccess(groupId);
+    }
+  }
+}
+
 async function recomputeGroupAccess(groupId) {
   const gSnap = await getDoc(groupDoc(groupId));
   if (!gSnap.exists()) return;

@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import {
-  listProfiles, createProfile, setProfileAccess, ADMIN_EMAIL,
+  listProfiles, createProfile, setProfileAccess, deleteProfile, ADMIN_EMAIL,
   addSession, deleteSession,
   addResource, deleteResource,
   subscribeSessions, subscribeResources,
@@ -162,6 +162,18 @@ export const AppProvider = ({ children }) => {
     return created;
   };
 
+  // Admin-only: permanently delete a profile and all its data.
+  const removeProfile = async (profileId) => {
+    await deleteProfile(profileId);
+    setProfiles((ps) => ps.filter((p) => p.id !== profileId));
+    if (activeProfileId === profileId) {
+      const nextActive = profiles.find((p) => p.id !== profileId)?.id || null;
+      setActiveProfileId(nextActive);
+      if (nextActive) localStorage.setItem(ACTIVE_PROFILE_KEY, nextActive);
+      else localStorage.removeItem(ACTIVE_PROFILE_KEY);
+    }
+  };
+
   // Admin-only: change which emails may see a profile.
   const updateProfileAccess = async (profileId, emails) => {
     const baseEmails = await setProfileAccess(profileId, emails);
@@ -187,7 +199,7 @@ export const AppProvider = ({ children }) => {
       loading, resourceLoading, syncing, error, successMsg,
       mediaPlayer, isSettingsOpen, setIsSettingsOpen,
       profiles, activeProfile, activeProfileId, isAdmin,
-      switchProfile, addProfile, updateProfileAccess,
+      switchProfile, addProfile, updateProfileAccess, removeProfile,
       addExerciseLog, deleteExerciseLog,
       addResourceLink, deleteResourceLink,
       ensureResourcesLoaded,
