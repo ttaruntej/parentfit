@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
 import {
   listProfiles, createProfile, setProfileAccess, deleteProfile, ADMIN_EMAIL,
@@ -17,6 +17,9 @@ export const AppProvider = ({ children }) => {
   const [activeProfileId, setActiveProfileId] = useState(
     () => localStorage.getItem(ACTIVE_PROFILE_KEY) || null
   );
+  // Latest activeProfileId, readable inside the loader effect without making
+  // it a dependency — so switching/creating a profile never re-fetches.
+  const activeProfileIdRef = useRef(activeProfileId);
 
   const [exerciseData, setExerciseData] = useState({ logs: [] });
   const [resourceData, setResourceData] = useState({ resources: [] });
@@ -34,6 +37,10 @@ export const AppProvider = ({ children }) => {
 
   const triggerSuccess = (msg) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(null), 4000); };
   const triggerError   = (msg) => { setError(msg);      setTimeout(() => setError(null), 6000); };
+
+  useEffect(() => {
+    activeProfileIdRef.current = activeProfileId;
+  }, [activeProfileId]);
 
   useEffect(() => {
     if (!user) {
@@ -55,12 +62,14 @@ export const AppProvider = ({ children }) => {
           const ps = await listProfiles();
           if (cancelled) return;
           setProfiles(ps);
-          const nextProfileId = activeProfileId && ps.some((p) => p.id === activeProfileId)
-            ? activeProfileId
+          const current = activeProfileIdRef.current;
+          const nextProfileId = current && ps.some((p) => p.id === current)
+            ? current
             : ps[0]?.id || null;
-          if (nextProfileId && nextProfileId !== activeProfileId) {
+          if (nextProfileId !== current) {
             setActiveProfileId(nextProfileId);
-            localStorage.setItem(ACTIVE_PROFILE_KEY, nextProfileId);
+            if (nextProfileId) localStorage.setItem(ACTIVE_PROFILE_KEY, nextProfileId);
+            else localStorage.removeItem(ACTIVE_PROFILE_KEY);
           }
           if (ps.length === 0) setLoading(false);
           return;
@@ -79,7 +88,10 @@ export const AppProvider = ({ children }) => {
       }
     })();
     return () => { cancelled = true; };
-  }, [user, activeProfileId, reloadKey]);
+    // Deliberately NOT depending on activeProfileId: the profile list is
+    // loaded per sign-in (or manual retry), not when the active profile
+    // changes. Creating/switching a profile updates state directly.
+  }, [user, reloadKey]);
 
   useEffect(() => {
     if (!user || !activeProfileId) return;
