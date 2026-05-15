@@ -1,5 +1,5 @@
 import {
-  collection, doc, addDoc, deleteDoc, getDocs, setDoc, updateDoc,
+  collection, doc, addDoc, deleteDoc, getDocs, updateDoc,
   query, where, orderBy, onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
 import { auth } from '../lib/firebaseAuth';
@@ -44,14 +44,18 @@ export async function listProfiles() {
 }
 
 export async function createProfile({ slug, name, initials, color, allowedEmails = [] }) {
-  // Use the slug as the document id so the app and the import script agree.
+  // Any signed-in user may create a profile. Always seed the allow-list with
+  // the creator's own email so they can read/write it — firestore.rules
+  // rejects a create where the creator is not on the list.
+  const creator = myEmail();
+  const seedEmails = creator === ADMIN_EMAIL ? allowedEmails : [creator, ...allowedEmails];
   const profile = {
     slug, name, initials, color,
-    allowedEmails: normalizeEmails(allowedEmails),
+    allowedEmails: normalizeEmails(seedEmails),
     createdAt: serverTimestamp(),
   };
-  await setDoc(profileDoc(slug), profile);
-  return { id: slug, slug, name, initials, color, allowedEmails: profile.allowedEmails };
+  const ref = await addDoc(profilesCol(), profile);
+  return { id: ref.id, slug, name, initials, color, allowedEmails: profile.allowedEmails };
 }
 
 // Admin-only: replace the set of emails allowed to see a profile.

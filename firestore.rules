@@ -29,9 +29,15 @@ service cloud.firestore {
     // ---- Per-profile data -------------------------------------------------
     match /profiles/{profileId} {
       // Profile metadata, including the allowedEmails list itself.
-      // Anyone on the list may read it; only the admin may create or change it.
-      allow read:                   if isAdmin() || isAllowed(profileId);
-      allow create, update, delete:  if isAdmin();
+      // Anyone on the list (or the admin) may read it.
+      allow read:           if isAdmin() || isAllowed(profileId);
+
+      // Open sign-up: any verified user may create their own profile, as long
+      // as they put their own email on the allow-list so they can use it.
+      // Changing the allow-list or deleting a profile stays admin-only.
+      allow create:         if isAdmin()
+                            || (isVerified() && userEmail() in request.resource.data.allowedEmails);
+      allow update, delete: if isAdmin();
 
       // Sessions, resources, and any future subcollection: an allowed member
       // may read and write their own profile's data; the admin may do anything.

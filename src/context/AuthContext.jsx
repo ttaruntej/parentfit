@@ -4,6 +4,8 @@ import {
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
+  GoogleAuthProvider,
+  signInWithPopup,
   signOut as fbSignOut,
 } from 'firebase/auth';
 import { auth } from '../lib/firebaseAuth';
@@ -49,10 +51,16 @@ export function AuthProvider({ children }) {
     window.localStorage.setItem(STORED_EMAIL_KEY, email);
   };
 
+  const signInWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    await signInWithPopup(auth, provider);
+  };
+
   const signOut = () => fbSignOut(auth);
 
   return (
-    <AuthContext.Provider value={{ user, loadingSession, sendSignInLink, signOut }}>
+    <AuthContext.Provider value={{ user, loadingSession, sendSignInLink, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );
