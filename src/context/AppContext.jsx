@@ -21,6 +21,8 @@ export const AppProvider = ({ children }) => {
   const [exerciseData, setExerciseData] = useState({ logs: [] });
   const [resourceData, setResourceData] = useState({ resources: [] });
   const [loading, setLoading] = useState(true);
+  const [profilesError, setProfilesError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [resourceLoading, setResourceLoading] = useState(false);
   const [resourcesEnabled, setResourcesEnabled] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -38,31 +40,46 @@ export const AppProvider = ({ children }) => {
       setProfiles([]);
       setExerciseData({ logs: [] });
       setResourceData({ resources: [] });
+      setProfilesError(false);
       setLoading(false);
       return;
     }
     let cancelled = false;
     (async () => {
-      try {
-        const ps = await listProfiles();
-        if (cancelled) return;
-        setProfiles(ps);
-        const nextProfileId = activeProfileId && ps.some((p) => p.id === activeProfileId)
-          ? activeProfileId
-          : ps[0]?.id || null;
-        if (nextProfileId && nextProfileId !== activeProfileId) {
-          setActiveProfileId(nextProfileId);
-          localStorage.setItem(ACTIVE_PROFILE_KEY, nextProfileId);
+      setProfilesError(false);
+      // Retry transient failures so a network blip can't be mistaken for
+      // "this account has no profile" (which would offer profile creation
+      // to an existing, mapped user).
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          const ps = await listProfiles();
+          if (cancelled) return;
+          setProfiles(ps);
+          const nextProfileId = activeProfileId && ps.some((p) => p.id === activeProfileId)
+            ? activeProfileId
+            : ps[0]?.id || null;
+          if (nextProfileId && nextProfileId !== activeProfileId) {
+            setActiveProfileId(nextProfileId);
+            localStorage.setItem(ACTIVE_PROFILE_KEY, nextProfileId);
+          }
+          if (ps.length === 0) setLoading(false);
+          return;
+        } catch (e) {
+          console.error(`listProfiles attempt ${attempt} failed:`, e);
+          if (attempt < 3 && !cancelled) {
+            await new Promise((resolve) => setTimeout(resolve, attempt * 800));
+            continue;
+          }
+          if (cancelled) return;
+          // Could not load — show a retry screen rather than the
+          // "create a profile" screen.
+          setProfilesError(true);
+          setLoading(false);
         }
-        if (ps.length === 0) setLoading(false);
-      } catch (e) {
-        console.error(e);
-        triggerError('Could not load profiles.');
-        setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [user, activeProfileId]);
+  }, [user, activeProfileId, reloadKey]);
 
   useEffect(() => {
     if (!user || !activeProfileId) return;
@@ -90,6 +107,13 @@ export const AppProvider = ({ children }) => {
 
   const ensureResourcesLoaded = useCallback(() => {
     setResourcesEnabled(true);
+  }, []);
+
+  // Re-attempt loading profiles after a load failure.
+  const retryLoadProfiles = useCallback(() => {
+    setProfilesError(false);
+    setLoading(true);
+    setReloadKey((k) => k + 1);
   }, []);
 
   const addExerciseLog = async (newLog) => {
@@ -211,6 +235,7 @@ export const AppProvider = ({ children }) => {
     <AppContext.Provider value={{
       exerciseData, resourceData,
       loading, resourceLoading, syncing, error, successMsg,
+      profilesError, retryLoadProfiles,
       mediaPlayer, isSettingsOpen, setIsSettingsOpen,
       profiles, activeProfile, activeProfileId, isAdmin,
       switchProfile, addProfile, updateProfileAccess, removeProfile,
