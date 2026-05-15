@@ -51,9 +51,11 @@ export const AppProvider = ({ children }) => {
     let cancelled = false;
     (async () => {
       // Keep retrying in the background until the profile list loads.
-      // A transient failure never surfaces as an error and is never
-      // mistaken for "no profile" — the user just stays on the loading
-      // spinner until it succeeds.
+      // Permanent errors (permission-denied, unauthenticated) break
+      // the loop immediately so the user isn't stuck forever.
+      const PERMANENT_ERRORS = new Set([
+        'permission-denied', 'unauthenticated', 'not-found',
+      ]);
       for (let attempt = 1; !cancelled; attempt += 1) {
         try {
           const ps = await listProfiles();
@@ -69,7 +71,14 @@ export const AppProvider = ({ children }) => {
           if (ps.length === 0) setLoading(false);
           return;
         } catch (e) {
-          console.error(`listProfiles attempt ${attempt} failed, retrying:`, e);
+          console.error(`listProfiles attempt ${attempt} failed:`, e);
+          // Break immediately for permanent errors — retrying would be
+          // pointless and leaves the user on an infinite loading spinner.
+          if (PERMANENT_ERRORS.has(e?.code)) {
+            console.error('Permanent error loading profiles, giving up:', e.code);
+            if (!cancelled) setLoading(false);
+            return;
+          }
           await new Promise((resolve) => setTimeout(resolve, Math.min(attempt * 1000, 5000)));
         }
       }

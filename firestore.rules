@@ -28,9 +28,17 @@ service cloud.firestore {
 
     // ---- Per-profile data -------------------------------------------------
     match /profiles/{profileId} {
-      // Profile metadata, including the allowedEmails list itself.
-      // Anyone on the list (or the admin) may read it.
-      allow read:           if isAdmin() || isAllowed(profileId);
+      // Single-document read: profileId is a concrete id, so isAllowed()'s
+      // get() can resolve. Anyone on the allow-list (or the admin) may read it.
+      allow get:            if isAdmin() || isAllowed(profileId);
+
+      // Collection query: on a list the {profileId} wildcard is NOT bound to a
+      // document id, so isAllowed()'s get() cannot resolve and would reject the
+      // whole query. Check the document itself instead. The client query is
+      // constrained with `allowedEmails array-contains <email>`, so every
+      // result is a profile the caller is actually allow-listed on.
+      allow list:           if isAdmin()
+                            || (isVerified() && userEmail() in resource.data.allowedEmails);
 
       // Open sign-up: any verified user may create their own profile, as long
       // as they put their own email on the allow-list so they can use it.
