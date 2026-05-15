@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { CheckCircle2, Plus, Minus, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle2, Plus, Minus, ChevronDown, ChevronUp, Camera, X } from 'lucide-react';
 import { WORKOUT_CATEGORY } from '../lib/workoutTypes';
+
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 const TYPES = [
   { value: 'push',  emoji: '💪', name: 'Push Day',    desc: 'Chest · Shoulders · Triceps' },
@@ -191,8 +193,60 @@ function ExStep({ exercises, onUpdate, onAddEx, onRemoveEx, onAddSet, onRemoveSe
   );
 }
 
+// Optional post-workout photo picker with preview
+function PhotoField({ photoFile, setPhotoFile }) {
+  const [err, setErr] = useState(null);
+  const preview = useMemo(() => (photoFile ? URL.createObjectURL(photoFile) : null), [photoFile]);
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
+  const onPick = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setErr('Please choose an image file.'); return; }
+    if (file.size > MAX_PHOTO_BYTES) { setErr('Image is too large (max 8 MB).'); return; }
+    setErr(null);
+    setPhotoFile(file);
+  };
+
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>
+        Post-workout photo (optional)
+      </label>
+      {preview ? (
+        <div style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+          <img src={preview} alt="Workout preview" style={{ width: '100%', maxHeight: 240, objectFit: 'cover', display: 'block' }} />
+          <button
+            type="button"
+            onClick={() => setPhotoFile(null)}
+            aria-label="Remove photo"
+            style={{
+              position: 'absolute', top: 8, right: 8, width: 30, height: 30,
+              borderRadius: '50%', border: 'none', cursor: 'pointer',
+              background: 'rgba(0,0,0,0.65)', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ) : (
+        <label
+          className="btn btn-ghost btn-full"
+          style={{ borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+        >
+          <Camera size={16} /> Add a photo
+          <input type="file" accept="image/*" onChange={onPick} style={{ display: 'none' }} />
+        </label>
+      )}
+      {err && <p style={{ color: '#F87171', fontSize: '0.78rem', marginTop: '0.4rem' }}>{err}</p>}
+    </div>
+  );
+}
+
 // Step 3 — finish
-function FinishStep({ duration, setDuration, notes, setNotes, workoutType, syncing, canSubmit }) {
+function FinishStep({ duration, setDuration, notes, setNotes, photoFile, setPhotoFile, workoutType, syncing, canSubmit }) {
   const t = TYPES.find(t => t.value === workoutType);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -232,6 +286,8 @@ function FinishStep({ duration, setDuration, notes, setNotes, workoutType, synci
         />
       </div>
 
+      <PhotoField photoFile={photoFile} setPhotoFile={setPhotoFile} />
+
       <button
         type="submit"
         disabled={syncing || !canSubmit}
@@ -259,6 +315,7 @@ export default function ExerciseLogger() {
   const [exercises, setExercises] = useState([emptyEx()]);
   const [duration, setDuration] = useState(45);
   const [notes, setNotes] = useState('');
+  const [photoFile, setPhotoFile] = useState(null);
   const canSubmit = exercises.some(ex => ex.name.trim());
 
   const updateSet = (ei, si, field, val) =>
@@ -312,10 +369,12 @@ export default function ExerciseLogger() {
           })),
         })),
       rawHeader: `${today} — ${typeInfo.name}`,
+      photoFile: photoFile || null,
     };
 
     await addExerciseLog(payload);
     setNotes('');
+    setPhotoFile(null);
     setExercises([emptyEx()]);
     setDuration(45);
     setWorkoutType('push');
@@ -384,6 +443,8 @@ export default function ExerciseLogger() {
             setDuration={setDuration}
             notes={notes}
             setNotes={setNotes}
+            photoFile={photoFile}
+            setPhotoFile={setPhotoFile}
             workoutType={workoutType}
             syncing={syncing}
             canSubmit={canSubmit}

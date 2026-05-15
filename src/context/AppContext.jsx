@@ -164,9 +164,11 @@ export const AppProvider = ({ children }) => {
 
   // Admin-only: change which emails may see a profile.
   const updateProfileAccess = async (profileId, emails) => {
-    const allowedEmails = await setProfileAccess(profileId, emails);
-    setProfiles((ps) => ps.map((p) => (p.id === profileId ? { ...p, allowedEmails } : p)));
-    return allowedEmails;
+    const baseEmails = await setProfileAccess(profileId, emails);
+    setProfiles((ps) => ps.map((p) => (
+      p.id === profileId ? { ...p, baseEmails, allowedEmails: baseEmails } : p
+    )));
+    return baseEmails;
   };
 
   const forceManualSync = async () => {

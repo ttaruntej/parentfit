@@ -1,9 +1,11 @@
 import {
-  collection, doc, addDoc, deleteDoc, getDocs, updateDoc,
+  collection, doc, addDoc, deleteDoc, getDocs, getDoc, setDoc, updateDoc, writeBatch,
   query, where, orderBy, onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth } from '../lib/firebaseAuth';
 import { db } from '../lib/firebaseDb';
+import { storage } from '../lib/firebaseStorage';
 
 // The single account that may create profiles and manage who can see them.
 export const ADMIN_EMAIL = 'taruntejthadana@gmail.com';
@@ -22,15 +24,25 @@ export function isAdmin() {
   }
 }
 
-// Profiles now live in a shared top-level collection. Access is gated per
-// profile by the allowedEmails field (see firestore.rules), not by the
-// signed-in account's uid.
 const profilesCol  = ()                => collection(db, 'profiles');
 const profileDoc   = (profileId)        => doc(db, 'profiles', profileId);
 const sessionsCol  = (profileId)        => collection(db, 'profiles', profileId, 'sessions');
 const resourcesCol = (profileId)        => collection(db, 'profiles', profileId, 'resources');
 const sessionDoc   = (profileId, id)    => doc(db, 'profiles', profileId, 'sessions',  id);
 const resourceDoc  = (profileId, id)    => doc(db, 'profiles', profileId, 'resources', id);
+const groupsCol    = ()                 => collection(db, 'groups');
+const groupDoc     = (groupId)          => doc(db, 'groups', groupId);
+
+function normalizeEmails(emails) {
+  return [...new Set((emails || [])
+    .map((e) => String(e).trim().toLowerCase())
+    .filter(Boolean))];
+}
+
+// A profile's own (pre-group) allow-list. Older docs only have allowedEmails.
+function baseEmailsOf(profile) {
+  return normalizeEmails(profile.baseEmails || profile.allowedEmails || []);
+}
 
 export async function listProfiles() {
   // The admin sees every profile. Everyone else may only query the profiles
@@ -48,33 +60,124 @@ export async function createProfile({ slug, name, initials, color, allowedEmails
   // the creator's own email so they can read/write it — firestore.rules
   // rejects a create where the creator is not on the list.
   const creator = myEmail();
-  const seedEmails = creator === ADMIN_EMAIL ? allowedEmails : [creator, ...allowedEmails];
+  const seed = normalizeEmails(creator === ADMIN_EMAIL ? allowedEmails : [creator, ...allowedEmails]);
   const profile = {
     slug, name, initials, color,
-    allowedEmails: normalizeEmails(seedEmails),
+    baseEmails: seed,
+    allowedEmails: seed,
     createdAt: serverTimestamp(),
   };
   const ref = await addDoc(profilesCol(), profile);
-  return { id: ref.id, slug, name, initials, color, allowedEmails: profile.allowedEmails };
+  return { id: ref.id, slug, name, initials, color, allowedEmails: seed };
 }
 
-// Admin-only: replace the set of emails allowed to see a profile.
+// Admin-only: replace a profile's own allow-list. If the profile belongs to a
+// group, the group's combined access is recomputed so siblings stay in sync.
 export async function setProfileAccess(profileId, emails) {
-  const allowedEmails = normalizeEmails(emails);
-  await updateDoc(profileDoc(profileId), { allowedEmails });
-  return allowedEmails;
+  const base = normalizeEmails(emails);
+  const snap = await getDoc(profileDoc(profileId));
+  const groupId = snap.exists() ? (snap.data().groupId || null) : null;
+  if (groupId) {
+    await updateDoc(profileDoc(profileId), { baseEmails: base });
+    await recomputeGroupAccess(groupId);
+  } else {
+    await updateDoc(profileDoc(profileId), { baseEmails: base, allowedEmails: base });
+  }
+  return base;
 }
 
-function normalizeEmails(emails) {
-  return [...new Set((emails || [])
-    .map((e) => String(e).trim().toLowerCase())
-    .filter(Boolean))];
+// ---- Groups ---------------------------------------------------------------
+// A group lets several profiles see and edit each other's data. Access is
+// enforced by writing the union of every member's own emails into each
+// member profile's allowedEmails (the field the security rules check).
+
+export async function listGroups() {
+  const snap = await getDocs(groupsCol());
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => String(a['name'] || '').localeCompare(String(b['name'] || '')));
+}
+
+export async function saveGroup({ id, name, profileIds }) {
+  const groupId = id || doc(groupsCol()).id;
+  const ids = [...new Set(profileIds || [])];
+
+  const all = (await getDocs(profilesCol())).docs.map((d) => ({ id: d.id, ...d.data() }));
+  const members = all.filter((p) => ids.includes(p.id));
+  const removed = all.filter((p) => p.groupId === groupId && !ids.includes(p.id));
+  const union = normalizeEmails(members.flatMap(baseEmailsOf));
+
+  const batch = writeBatch(db);
+  members.forEach((p) => batch.update(profileDoc(p.id), {
+    groupId,
+    baseEmails: baseEmailsOf(p),
+    allowedEmails: union,
+  }));
+  removed.forEach((p) => batch.update(profileDoc(p.id), {
+    groupId: null,
+    allowedEmails: baseEmailsOf(p),
+  }));
+  batch.set(groupDoc(groupId), {
+    name: (name || 'Group').trim(),
+    profileIds: ids,
+    memberEmails: union,
+    updatedAt: serverTimestamp(),
+  });
+  await batch.commit();
+  return { id: groupId, name, profileIds: ids, memberEmails: union };
+}
+
+export async function deleteGroup(id) {
+  const all = (await getDocs(profilesCol())).docs.map((d) => ({ id: d.id, ...d.data() }));
+  const members = all.filter((p) => p.groupId === id);
+  const batch = writeBatch(db);
+  members.forEach((p) => batch.update(profileDoc(p.id), {
+    groupId: null,
+    allowedEmails: baseEmailsOf(p),
+  }));
+  batch.delete(groupDoc(id));
+  await batch.commit();
+}
+
+async function recomputeGroupAccess(groupId) {
+  const gSnap = await getDoc(groupDoc(groupId));
+  if (!gSnap.exists()) return;
+  const profileIds = gSnap.data().profileIds || [];
+  const members = [];
+  for (const pid of profileIds) {
+    const ps = await getDoc(profileDoc(pid));
+    if (ps.exists()) members.push({ id: pid, ...ps.data() });
+  }
+  const union = normalizeEmails(members.flatMap(baseEmailsOf));
+  const batch = writeBatch(db);
+  members.forEach((m) => batch.update(profileDoc(m.id), { allowedEmails: union, groupId }));
+  batch.update(groupDoc(groupId), { memberEmails: union });
+  await batch.commit();
+}
+
+// ---- Sessions & resources -------------------------------------------------
+
+async function uploadSessionPhoto(profileId, sessionId, file) {
+  const ext = (file.name?.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const path = `profiles/${profileId}/sessions/${sessionId}/photo.${ext}`;
+  const r = storageRef(storage, path);
+  await uploadBytes(r, file, { contentType: file.type || 'image/jpeg' });
+  const photoUrl = await getDownloadURL(r);
+  return { photoUrl, photoPath: path };
 }
 
 export async function addSession(profileId, session) {
-  const payload = sessionToDoc(session);
-  const ref = await addDoc(sessionsCol(profileId), { ...payload, createdAt: serverTimestamp() });
-  return { id: ref.id, ...session };
+  // photoFile is a browser File object — upload it to Storage first, then
+  // store only the resulting URL on the Firestore document.
+  const { photoFile, ...rest } = session;
+  const ref = doc(sessionsCol(profileId));
+  let photo = {};
+  if (photoFile) {
+    photo = await uploadSessionPhoto(profileId, ref.id, photoFile);
+  }
+  const payload = sessionToDoc({ ...rest, ...photo });
+  await setDoc(ref, { ...payload, createdAt: serverTimestamp() });
+  return { id: ref.id, ...rest, ...photo };
 }
 
 export async function deleteSession(profileId, id) {
@@ -138,6 +241,8 @@ function docToSession(d) {
     exercises: data.exercises || [],
     dayOfWeek: data.dayOfWeek,
     rawHeader: data.rawHeader,
+    photoUrl: data.photoUrl || null,
+    photoPath: data.photoPath || null,
   };
 }
 
@@ -164,6 +269,8 @@ function sessionToDoc(s) {
     exercises: s.exercises ?? [],
     dayOfWeek: s.dayOfWeek,
     rawHeader: s.rawHeader,
+    photoUrl: s.photoUrl || null,
+    photoPath: s.photoPath || null,
   });
 }
 

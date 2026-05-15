@@ -1,4 +1,7 @@
 import React from 'react';
+import { LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import microWorkoutsImg from '../assets/content/micro_workouts.jpg';
 import dadStrengthImg from '../assets/content/dad_strength.jpg';
 import nutritionImg from '../assets/content/nutrition.jpg';
@@ -45,6 +48,9 @@ function KnowledgeCard({ title, desc, tag, img }) {
 }
 
 export default function MorePage() {
+  const { signOut, user } = useAuth();
+  const { setIsSettingsOpen } = useApp();
+
   return (
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div>
@@ -59,7 +65,40 @@ export default function MorePage() {
         </div>
       </div>
 
-      <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: '2rem', opacity: 0.6 }}>
+      {/* Account */}
+      <div>
+        <div className="section-header">
+          <div className="section-title">Account</div>
+        </div>
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Signed in as
+            </div>
+            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', wordBreak: 'break-all' }}>
+              {user?.email || '—'}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsSettingsOpen(true)}
+            className="btn btn-ghost btn-full"
+            style={{ borderRadius: 'var(--radius-md)' }}
+          >
+            <SettingsIcon size={16} /> Account &amp; settings
+          </button>
+          <button
+            type="button"
+            onClick={signOut}
+            className="btn btn-danger btn-full"
+            style={{ borderRadius: 'var(--radius-md)' }}
+          >
+            <LogOut size={16} /> Sign out
+          </button>
+        </div>
+      </div>
+
+      <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: '1rem', opacity: 0.6 }}>
         ParentFit - Firebase Sync
       </div>
     </div>

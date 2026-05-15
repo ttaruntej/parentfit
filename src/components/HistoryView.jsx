@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
-import { Trash2, Search, X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import { Trash2, Search, X, ChevronRight, SlidersHorizontal, Image as ImageIcon } from 'lucide-react';
 import {
   compareSessionsAsc,
   compareSessionsDesc,
@@ -8,6 +8,7 @@ import {
   getSessionDateKey,
   getSessionInstant,
 } from '../lib/sessionTime';
+import SessionDetailModal from './SessionDetailModal';
 
 const CAT_MAP = {
   push:  { emoji: '💪', cls: 'cat-push',  label: 'Push' },
@@ -90,36 +91,37 @@ function Heatmap({ logs }) {
   );
 }
 
-// Expandable session detail card
-function SessionCard({ item, onDelete, syncing }) {
-  const [expanded, setExpanded] = useState(false);
+// Session summary card — tap to open the full detail modal
+function SessionCard({ item, onOpen, onDelete, syncing }) {
   const cat = CAT_MAP[item.workoutType] || CAT_MAP.mixed;
-  const toggleExpanded = () => setExpanded(v => !v);
+  const dateStr = formatSessionDateTime(item, { weekday: true });
   const handleKeyDown = (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      toggleExpanded();
+      onOpen(item);
     }
   };
-  const dateStr = formatSessionDateTime(item, { weekday: true });
 
   return (
     <div
       className="session-card"
       role="button"
       tabIndex={0}
-      aria-expanded={expanded}
-      style={{ flexDirection: 'column', gap: 0, cursor: 'pointer' }}
-      onClick={toggleExpanded}
+      style={{ cursor: 'pointer' }}
+      onClick={() => onOpen(item)}
       onKeyDown={handleKeyDown}
     >
-      {/* Main row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.875rem', width: '100%' }}>
         <div className="session-dot" style={{ background: 'rgba(255,107,53,0.12)', flexShrink: 0 }}>{cat.emoji}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <span className={`cat-pill ${cat.cls}`}>{cat.label}</span>
             <span className="text-xs text-dim">{dateStr}</span>
+            {item.photoUrl && (
+              <span className="text-xs text-dim" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.15rem' }}>
+                <ImageIcon size={11} /> Photo
+              </span>
+            )}
           </div>
           <div style={{ fontWeight: 600, fontSize: '0.9rem', marginTop: '0.2rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {item.title || `${cat.label} Session`}
@@ -142,34 +144,10 @@ function SessionCard({ item, onDelete, syncing }) {
             <Trash2 size={14} />
           </button>
           <span style={{ color: 'var(--text-tertiary)' }}>
-            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            <ChevronRight size={16} />
           </span>
         </div>
       </div>
-
-      {/* Expanded exercise breakdown */}
-      {expanded && item.exercises?.length > 0 && (
-        <div style={{ marginTop: '0.875rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '0.75rem', width: '100%' }}
-          onClick={e => e.stopPropagation()}>
-          <div className="section-title" style={{ marginBottom: '0.5rem' }}>Exercises</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {item.exercises.map((ex, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{ex.name}</span>
-                <span className="text-xs text-dim" style={{ whiteSpace: 'nowrap', marginTop: '0.1rem' }}>
-                  {ex.sets?.length ? `${ex.sets.length} sets` : ''}
-                  {ex.sets?.[0]?.weight_kg ? ` · ${ex.sets[0].weight_kg}kg` : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-          {item.notes && (
-            <div style={{ marginTop: '0.625rem', fontSize: '0.82rem', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: 1.5, borderTop: '1px solid var(--border-subtle)', paddingTop: '0.5rem' }}>
-              "{item.notes}"
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -182,6 +160,7 @@ export default function HistoryView() {
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('newest');
   const [showSort, setShowSort] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
 
   const FILTERS = useMemo(() => [
     { v: 'all',   label: 'All',   count: allLogs.length },
@@ -234,6 +213,7 @@ export default function HistoryView() {
   }, [filtered]);
 
   const clearSearch = useCallback(() => { setQuery(''); setFilter('all'); }, []);
+  const selected = useMemo(() => allLogs.find(l => l.id === selectedId) || null, [allLogs, selectedId]);
 
   return (
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -344,6 +324,7 @@ export default function HistoryView() {
                 <SessionCard
                   key={item.id}
                   item={item}
+                  onOpen={i => setSelectedId(i.id)}
                   onDelete={deleteExerciseLog}
                   syncing={syncing}
                 />
@@ -351,6 +332,15 @@ export default function HistoryView() {
             </div>
           </div>
         ))
+      )}
+
+      {selected && (
+        <SessionDetailModal
+          session={selected}
+          onClose={() => setSelectedId(null)}
+          onDelete={deleteExerciseLog}
+          syncing={syncing}
+        />
       )}
     </div>
   );

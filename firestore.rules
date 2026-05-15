@@ -46,6 +46,14 @@ service cloud.firestore {
       }
     }
 
+    // ---- Profile groups ---------------------------------------------------
+    // Admin-only bookkeeping. Grouping is enforced for data access by
+    // denormalising the combined member emails into each grouped profile's
+    // allowedEmails list, so the rules above need no group-specific logic.
+    match /groups/{groupId} {
+      allow read, write: if isAdmin();
+    }
+
     // ---- Default deny -----------------------------------------------------
     // Everything else, including the legacy users/{uid} tree, is closed.
     match /{document=**} {
