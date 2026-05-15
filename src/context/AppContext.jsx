@@ -24,8 +24,6 @@ export const AppProvider = ({ children }) => {
   const [exerciseData, setExerciseData] = useState({ logs: [] });
   const [resourceData, setResourceData] = useState({ resources: [] });
   const [loading, setLoading] = useState(true);
-  const [profilesError, setProfilesError] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
   const [resourceLoading, setResourceLoading] = useState(false);
   const [resourcesEnabled, setResourcesEnabled] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -47,17 +45,16 @@ export const AppProvider = ({ children }) => {
       setProfiles([]);
       setExerciseData({ logs: [] });
       setResourceData({ resources: [] });
-      setProfilesError(false);
       setLoading(false);
       return;
     }
     let cancelled = false;
     (async () => {
-      setProfilesError(false);
-      // Retry transient failures so a network blip can't be mistaken for
-      // "this account has no profile" (which would offer profile creation
-      // to an existing, mapped user).
-      for (let attempt = 1; attempt <= 3; attempt += 1) {
+      // Keep retrying in the background until the profile list loads.
+      // A transient failure never surfaces as an error and is never
+      // mistaken for "no profile" — the user just stays on the loading
+      // spinner until it succeeds.
+      for (let attempt = 1; !cancelled; attempt += 1) {
         try {
           const ps = await listProfiles();
           if (cancelled) return;
@@ -74,24 +71,16 @@ export const AppProvider = ({ children }) => {
           if (ps.length === 0) setLoading(false);
           return;
         } catch (e) {
-          console.error(`listProfiles attempt ${attempt} failed:`, e);
-          if (attempt < 3 && !cancelled) {
-            await new Promise((resolve) => setTimeout(resolve, attempt * 800));
-            continue;
-          }
-          if (cancelled) return;
-          // Could not load — show a retry screen rather than the
-          // "create a profile" screen.
-          setProfilesError(true);
-          setLoading(false);
+          console.error(`listProfiles attempt ${attempt} failed, retrying:`, e);
+          await new Promise((resolve) => setTimeout(resolve, Math.min(attempt * 1000, 5000)));
         }
       }
     })();
     return () => { cancelled = true; };
     // Deliberately NOT depending on activeProfileId: the profile list is
-    // loaded per sign-in (or manual retry), not when the active profile
-    // changes. Creating/switching a profile updates state directly.
-  }, [user, reloadKey]);
+    // loaded once per sign-in, not when the active profile changes.
+    // Creating/switching a profile updates state directly.
+  }, [user]);
 
   useEffect(() => {
     if (!user || !activeProfileId) return;
@@ -119,13 +108,6 @@ export const AppProvider = ({ children }) => {
 
   const ensureResourcesLoaded = useCallback(() => {
     setResourcesEnabled(true);
-  }, []);
-
-  // Re-attempt loading profiles after a load failure.
-  const retryLoadProfiles = useCallback(() => {
-    setProfilesError(false);
-    setLoading(true);
-    setReloadKey((k) => k + 1);
   }, []);
 
   const addExerciseLog = async (newLog) => {
@@ -247,7 +229,6 @@ export const AppProvider = ({ children }) => {
     <AppContext.Provider value={{
       exerciseData, resourceData,
       loading, resourceLoading, syncing, error, successMsg,
-      profilesError, retryLoadProfiles,
       mediaPlayer, isSettingsOpen, setIsSettingsOpen,
       profiles, activeProfile, activeProfileId, isAdmin,
       switchProfile, addProfile, updateProfileAccess, removeProfile,
