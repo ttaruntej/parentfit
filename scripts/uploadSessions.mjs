@@ -52,21 +52,27 @@ async function run() {
   
   console.log(`Uploading ${sessions.length} sessions...`);
   
+  const slugToId = {
+    'thadana-apparao': 'Kv5Xx8JlKM6gJFA9z1To',
+    'addipalli-vijaya-kumari': 'dHBCBnioktVCyUx1LFBb'
+  };
+
   let successCount = 0;
   let failCount = 0;
 
   for (const session of sessions) {
-    const profileId = session.profileSlug;
+    const profileSlug = session.profileSlug;
+    const profileId = slugToId[profileSlug];
     const docId = session.id;
     
-    // Add createdAt ISO string just like Firestore does roughly
+    // Convert performedAt to actual timestamp roughly for sorting if needed, but we just use new Date
     const payload = {
       ...session,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
     };
     
-    // Convert to REST format
     const firestoreData = { fields: toFirestore(payload).mapValue.fields };
+    firestoreData.fields.createdAt = { timestampValue: new Date().toISOString() };
     
     const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/profiles/${profileId}/sessions?documentId=${docId}`;
     
@@ -81,7 +87,6 @@ async function run() {
       });
       
       if (!res.ok) {
-        // If 409, it already exists, which we might want to PATCH instead, but POST fails
         const text = await res.text();
         if (res.status === 409) {
            console.log(`  - [SKIP] Session ${docId} already exists`);
@@ -91,7 +96,7 @@ async function run() {
            failCount++;
         }
       } else {
-        console.log(`  - [OK] Uploaded ${docId} to profile ${profileId}`);
+        console.log(`  - [OK] Uploaded ${docId} to true profile ${profileId}`);
         successCount++;
       }
     } catch (err) {
