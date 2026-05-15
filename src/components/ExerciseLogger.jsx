@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { CheckCircle2, Plus, Minus, ChevronDown, ChevronUp, Camera, X } from 'lucide-react';
 import { WORKOUT_CATEGORY } from '../lib/workoutTypes';
+import { compressImage } from '../lib/image';
 
-const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+const MAX_PHOTO_BYTES = 25 * 1024 * 1024;
 
 const TYPES = [
   { value: 'push',  emoji: '💪', name: 'Push Day',    desc: 'Chest · Shoulders · Triceps' },
@@ -193,20 +194,28 @@ function ExStep({ exercises, onUpdate, onAddEx, onRemoveEx, onAddSet, onRemoveSe
   );
 }
 
-// Optional post-workout photo picker with preview
-function PhotoField({ photoFile, setPhotoFile }) {
+// Optional post-workout photo picker. The image is resized + compressed in
+// the browser to a small JPEG data URL, then stored on the session itself.
+function PhotoField({ photoUrl, setPhotoUrl }) {
   const [err, setErr] = useState(null);
-  const preview = useMemo(() => (photoFile ? URL.createObjectURL(photoFile) : null), [photoFile]);
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  const [busy, setBusy] = useState(false);
 
-  const onPick = (e) => {
+  const onPick = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) { setErr('Please choose an image file.'); return; }
-    if (file.size > MAX_PHOTO_BYTES) { setErr('Image is too large (max 8 MB).'); return; }
+    if (file.size > MAX_PHOTO_BYTES) { setErr('Image is too large (max 25 MB).'); return; }
     setErr(null);
-    setPhotoFile(file);
+    setBusy(true);
+    try {
+      setPhotoUrl(await compressImage(file));
+    } catch (e2) {
+      console.error(e2);
+      setErr('Could not process that image. Try another.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -214,12 +223,12 @@ function PhotoField({ photoFile, setPhotoFile }) {
       <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>
         Post-workout photo (optional)
       </label>
-      {preview ? (
+      {photoUrl ? (
         <div style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-          <img src={preview} alt="Workout preview" style={{ width: '100%', maxHeight: 240, objectFit: 'cover', display: 'block' }} />
+          <img src={photoUrl} alt="Workout preview" style={{ width: '100%', maxHeight: 240, objectFit: 'cover', display: 'block' }} />
           <button
             type="button"
-            onClick={() => setPhotoFile(null)}
+            onClick={() => setPhotoUrl(null)}
             aria-label="Remove photo"
             style={{
               position: 'absolute', top: 8, right: 8, width: 30, height: 30,
@@ -234,10 +243,10 @@ function PhotoField({ photoFile, setPhotoFile }) {
       ) : (
         <label
           className="btn btn-ghost btn-full"
-          style={{ borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+          style={{ borderRadius: 'var(--radius-md)', cursor: busy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
         >
-          <Camera size={16} /> Add a photo
-          <input type="file" accept="image/*" onChange={onPick} style={{ display: 'none' }} />
+          <Camera size={16} /> {busy ? 'Processing...' : 'Add a photo'}
+          <input type="file" accept="image/*" onChange={onPick} disabled={busy} style={{ display: 'none' }} />
         </label>
       )}
       {err && <p style={{ color: '#F87171', fontSize: '0.78rem', marginTop: '0.4rem' }}>{err}</p>}
@@ -246,7 +255,7 @@ function PhotoField({ photoFile, setPhotoFile }) {
 }
 
 // Step 3 — finish
-function FinishStep({ duration, setDuration, notes, setNotes, photoFile, setPhotoFile, workoutType, syncing, canSubmit }) {
+function FinishStep({ duration, setDuration, notes, setNotes, photoUrl, setPhotoUrl, workoutType, syncing, canSubmit }) {
   const t = TYPES.find(t => t.value === workoutType);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -286,7 +295,7 @@ function FinishStep({ duration, setDuration, notes, setNotes, photoFile, setPhot
         />
       </div>
 
-      <PhotoField photoFile={photoFile} setPhotoFile={setPhotoFile} />
+      <PhotoField photoUrl={photoUrl} setPhotoUrl={setPhotoUrl} />
 
       <button
         type="submit"
@@ -315,7 +324,7 @@ export default function ExerciseLogger() {
   const [exercises, setExercises] = useState([emptyEx()]);
   const [duration, setDuration] = useState(45);
   const [notes, setNotes] = useState('');
-  const [photoFile, setPhotoFile] = useState(null);
+  const [photoUrl, setPhotoUrl] = useState(null);
   const canSubmit = exercises.some(ex => ex.name.trim());
 
   const updateSet = (ei, si, field, val) =>
@@ -369,12 +378,12 @@ export default function ExerciseLogger() {
           })),
         })),
       rawHeader: `${today} — ${typeInfo.name}`,
-      photoFile: photoFile || null,
+      photoUrl: photoUrl || null,
     };
 
     await addExerciseLog(payload);
     setNotes('');
-    setPhotoFile(null);
+    setPhotoUrl(null);
     setExercises([emptyEx()]);
     setDuration(45);
     setWorkoutType('push');
@@ -443,8 +452,8 @@ export default function ExerciseLogger() {
             setDuration={setDuration}
             notes={notes}
             setNotes={setNotes}
-            photoFile={photoFile}
-            setPhotoFile={setPhotoFile}
+            photoUrl={photoUrl}
+            setPhotoUrl={setPhotoUrl}
             workoutType={workoutType}
             syncing={syncing}
             canSubmit={canSubmit}

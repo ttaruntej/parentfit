@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
-import { Trash2, Search, X, ChevronRight, SlidersHorizontal, Image as ImageIcon } from 'lucide-react';
+import { Trash2, Search, X, ChevronRight, SlidersHorizontal, Image as ImageIcon, Download } from 'lucide-react';
 import {
   compareSessionsAsc,
   compareSessionsDesc,
@@ -8,6 +8,7 @@ import {
   getSessionDateKey,
   getSessionInstant,
 } from '../lib/sessionTime';
+import { buildSessionsCsv, downloadCsv } from '../lib/csv';
 import SessionDetailModal from './SessionDetailModal';
 
 const CAT_MAP = {
@@ -153,7 +154,7 @@ function SessionCard({ item, onOpen, onDelete, syncing }) {
 }
 
 export default function HistoryView() {
-  const { exerciseData, deleteExerciseLog, syncing } = useApp();
+  const { exerciseData, deleteExerciseLog, syncing, activeProfile } = useApp();
   const allLogs = useMemo(() => exerciseData?.logs || [], [exerciseData]);
 
   const [query, setQuery] = useState('');
@@ -215,6 +216,14 @@ export default function HistoryView() {
   const clearSearch = useCallback(() => { setQuery(''); setFilter('all'); }, []);
   const selected = useMemo(() => allLogs.find(l => l.id === selectedId) || null, [allLogs, selectedId]);
 
+  const exportCsv = useCallback(() => {
+    if (!filtered.length) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const who = String(activeProfile?.slug || activeProfile?.name || 'history')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'history';
+    downloadCsv(`parentfit-${who}-${stamp}.csv`, buildSessionsCsv(filtered));
+  }, [filtered, activeProfile]);
+
   return (
     <div className="fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <Heatmap logs={allLogs} />
@@ -248,6 +257,17 @@ export default function HistoryView() {
             </button>
           ))}
         </div>
+
+        <button
+          className="chip"
+          onClick={exportCsv}
+          disabled={!filtered.length}
+          style={{ gap: '0.3rem', flexShrink: 0 }}
+          title="Download these sessions as a CSV (opens in Excel)"
+        >
+          <Download size={12} />
+          Export
+        </button>
 
         {/* Sort dropdown */}
         <div style={{ position: 'relative', flexShrink: 0 }}>

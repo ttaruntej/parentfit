@@ -5,6 +5,7 @@ import jsxA11y from 'eslint-plugin-jsx-a11y';
 
 const browserGlobals = {
   alert: 'readonly',
+  Blob: 'readonly',
   confirm: 'readonly',
   console: 'readonly',
   document: 'readonly',

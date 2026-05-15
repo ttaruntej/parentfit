@@ -1,11 +1,9 @@
 import {
-  collection, doc, addDoc, deleteDoc, getDocs, getDoc, setDoc, updateDoc, writeBatch,
+  collection, doc, addDoc, deleteDoc, getDocs, getDoc, updateDoc, writeBatch,
   query, where, orderBy, onSnapshot, serverTimestamp,
 } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth } from '../lib/firebaseAuth';
 import { db } from '../lib/firebaseDb';
-import { storage } from '../lib/firebaseStorage';
 
 // The single account that may create profiles and manage who can see them.
 export const ADMIN_EMAIL = 'taruntejthadana@gmail.com';
@@ -157,27 +155,11 @@ async function recomputeGroupAccess(groupId) {
 
 // ---- Sessions & resources -------------------------------------------------
 
-async function uploadSessionPhoto(profileId, sessionId, file) {
-  const ext = (file.name?.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-  const path = `profiles/${profileId}/sessions/${sessionId}/photo.${ext}`;
-  const r = storageRef(storage, path);
-  await uploadBytes(r, file, { contentType: file.type || 'image/jpeg' });
-  const photoUrl = await getDownloadURL(r);
-  return { photoUrl, photoPath: path };
-}
-
 export async function addSession(profileId, session) {
-  // photoFile is a browser File object — upload it to Storage first, then
-  // store only the resulting URL on the Firestore document.
-  const { photoFile, ...rest } = session;
-  const ref = doc(sessionsCol(profileId));
-  let photo = {};
-  if (photoFile) {
-    photo = await uploadSessionPhoto(profileId, ref.id, photoFile);
-  }
-  const payload = sessionToDoc({ ...rest, ...photo });
-  await setDoc(ref, { ...payload, createdAt: serverTimestamp() });
-  return { id: ref.id, ...rest, ...photo };
+  // session.photoUrl, when present, is already a compressed JPEG data URL.
+  const payload = sessionToDoc(session);
+  const ref = await addDoc(sessionsCol(profileId), { ...payload, createdAt: serverTimestamp() });
+  return { id: ref.id, ...session };
 }
 
 export async function deleteSession(profileId, id) {
@@ -242,7 +224,6 @@ function docToSession(d) {
     dayOfWeek: data.dayOfWeek,
     rawHeader: data.rawHeader,
     photoUrl: data.photoUrl || null,
-    photoPath: data.photoPath || null,
   };
 }
 
@@ -270,7 +251,6 @@ function sessionToDoc(s) {
     dayOfWeek: s.dayOfWeek,
     rawHeader: s.rawHeader,
     photoUrl: s.photoUrl || null,
-    photoPath: s.photoPath || null,
   });
 }
 
