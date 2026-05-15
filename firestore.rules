@@ -45,7 +45,13 @@ service cloud.firestore {
       // Changing the allow-list or deleting a profile stays admin-only.
       allow create:         if isAdmin()
                             || (isVerified() && userEmail() in request.resource.data.allowedEmails);
-      allow update, delete: if isAdmin();
+      allow update:         if isAdmin()
+                            || (isVerified() 
+                                && userEmail() in resource.data.baseEmails
+                                && request.resource.data.allowedEmails == resource.data.allowedEmails
+                                && request.resource.data.baseEmails == resource.data.baseEmails
+                                && request.resource.data.groupId == resource.data.groupId);
+      allow delete:         if isAdmin();
 
       // Sessions, resources, and any future subcollection: an allowed member
       // may read and write their own profile's data; the admin may do anything.

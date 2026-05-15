@@ -70,6 +70,10 @@ export async function createProfile({ slug, name, initials, color, allowedEmails
   return { id: ref.id, slug, name, initials, color, allowedEmails: seed };
 }
 
+export async function updateProfileInfo(profileId, updates) {
+  await updateDoc(profileDoc(profileId), updates);
+}
+
 // Admin-only: replace a profile's own allow-list. If the profile belongs to a
 // group, the group's combined access is recomputed so siblings stay in sync.
 export async function setProfileAccess(profileId, emails) {

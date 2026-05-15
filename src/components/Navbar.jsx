@@ -72,15 +72,23 @@ export default function Navbar() {
                 transition: 'all 0.2s',
               }}
             >
-              <div style={{
-                width: 24, height: 24, borderRadius: '50%',
-                background: activeProfile.color,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.6rem', fontWeight: 700, color: 'white',
-                flexShrink: 0,
-              }}>
-                {activeProfile.initials}
-              </div>
+              {activeProfile.photoUrl ? (
+                <img
+                  src={activeProfile.photoUrl}
+                  alt={activeProfile.name}
+                  style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }}
+                />
+              ) : (
+                <div style={{
+                  width: 24, height: 24, borderRadius: '50%',
+                  background: activeProfile.color,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.6rem', fontWeight: 700, color: 'white',
+                  flexShrink: 0,
+                }}>
+                  {activeProfile.initials}
+                </div>
+              )}
               <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-primary)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {activeProfile.name.split(' ')[0]}
               </span>
@@ -119,14 +127,22 @@ export default function Navbar() {
                     onMouseEnter={(e) => { if (profile.id !== activeProfileId) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = profile.id === activeProfileId ? 'rgba(255,107,53,0.1)' : 'none'; }}
                   >
-                    <div style={{
-                      width: 34, height: 34, borderRadius: '50%',
-                      background: profile.color, flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '0.68rem', fontWeight: 700, color: 'white',
-                    }}>
-                      {profile.initials}
-                    </div>
+                    {profile.photoUrl ? (
+                      <img
+                        src={profile.photoUrl}
+                        alt={profile.name}
+                        style={{ width: 34, height: 34, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 34, height: 34, borderRadius: '50%',
+                        background: profile.color, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.68rem', fontWeight: 700, color: 'white',
+                      }}>
+                        {profile.initials}
+                      </div>
+                    )}
                     <div>
                       <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{profile.name}</div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '0.05rem' }}>

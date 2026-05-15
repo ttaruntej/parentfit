@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { useAuth } from './AuthContext';
 import {
   listProfiles, createProfile, setProfileAccess, deleteProfile, ADMIN_EMAIL,
+  updateProfileInfo,
   addSession, deleteSession,
   addResource, updateResource, deleteResource,
   subscribeSessions, subscribeResources,
@@ -60,6 +61,29 @@ export const AppProvider = ({ children }) => {
         try {
           const ps = await listProfiles();
           if (cancelled) return;
+
+          // Auto-sync Google photo and name
+          if (user.photoURL || user.displayName) {
+            const myEmail = user.email.toLowerCase();
+            const myProfiles = ps.filter(p => (p.baseEmails || [])[0] === myEmail);
+            for (const p of myProfiles) {
+              const updates = {};
+              if (user.photoURL && p.photoUrl !== user.photoURL) updates.photoUrl = user.photoURL;
+              if (user.displayName && p.name !== user.displayName) {
+                updates.name = user.displayName;
+                updates.initials = user.displayName.split(/\s+/).map((w) => w[0]?.toUpperCase() || '').slice(0, 2).join('') || 'P';
+              }
+              if (Object.keys(updates).length > 0) {
+                try {
+                  await updateProfileInfo(p.id, updates);
+                  Object.assign(p, updates); // optimistically update local object
+                } catch (err) {
+                  console.error('Failed to auto-sync profile info:', err);
+                }
+              }
+            }
+          }
+
           setProfiles(ps);
           const current = activeProfileIdRef.current;
           const nextProfileId = current && ps.some((p) => p.id === current)
